@@ -19,11 +19,33 @@ _Alta fidelidade interativa, conformidade documental e arquitetura de missão cr
 
 ---
 
-## 📌 Visão Geral (Overview)
+## 🌐 Demonstração Online (Live Demo)
 
-O **Orbenk Ops** é um ecossistema full-stack desenvolvido para centros de controle operacional (CCO) e empresas de segurança privada de grande porte. A plataforma digitaliza todo o ciclo de vida do atendimento pós-trauma: desde o disparo de alarmes e despacho de viaturas até a perícia documental, relato de testemunhas e emissão instantânea de laudos periciais em PDF.
+> [!TIP]
+> **Acesse a aplicação funcionando em tempo real sem precisar instalar nada:**  
+> 👉 **[https://lucasguesser5-ctrl.github.io/Orbenk-Ops/](https://lucasguesser5-ctrl.github.io/Orbenk-Ops/)**  
+> **Credenciais de Acesso:** Usuário: `admin` | Senha: `Link2026@`
 
-A interface segue uma linguagem visual *Mission Control / Enterprise Ops*, combinando densidade analítica, alta legibilidade, telemetria geoespacial ao vivo e suporte a 4 variantes de design temático com chaveamento instantâneo.
+---
+
+## 📸 Demonstração Visual (Screenshots)
+
+<div align="center">
+
+### 1. Painel Geral & Centro de Controle Tático
+<img src="docs/screenshots/dashboard.png" alt="Dashboard Orbenk Ops" width="850" style="border-radius: 8px; border: 1px solid #1a4a8a; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
+
+<br/><br/>
+
+### 2. Autenticação Operacional com Telemetria Satelital de 7 VTRs ao Vivo
+<img src="docs/screenshots/login-screen.png" alt="Login com Telemetria e VTRs" width="850" style="border-radius: 8px; border: 1px solid #1a4a8a; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
+
+<br/><br/>
+
+### 3. Arsenal de 4 Temas Sci-Fi / TRON com Live Preview Dinâmico
+<img src="docs/screenshots/theme-selector.png" alt="Seletor de Temas Arsenal TRON" width="850" style="border-radius: 8px; border: 1px solid #1a4a8a; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
+
+</div>
 
 ---
 
