@@ -1,0 +1,35 @@
+===================================================================
+ORBENK OPS — SISTEMA OPERACIONAL TÁTICO DE OCORRÊNCIAS
+Guia Rápido de Uso (Para envio por WhatsApp, E-mail ou Pendrive)
+===================================================================
+
+COMO ABRIR O SISTEMA EM QUALQUER COMPUTADOR WINDOWS:
+1. Extraia este arquivo ZIP em qualquer pasta da sua preferência.
+2. Dê 2 cliques no arquivo:
+   👉 "CLIQUE_AQUI_PARA_INICIAR.bat" (ou "INICIAR_ORBENK.bat")
+3. O sistema iniciará imediatamente e abrirá seu navegador padrão
+   (Chrome, Edge, Opera, Firefox) já na tela de login!
+
+NÃO É NECESSÁRIO INSTALAR NADA (Zero Instalação):
+- Não precisa instalar Python
+- Não precisa de Node.js
+- Não precisa de permissões de administrador
+- Roda 100% nativo no Windows 10 e Windows 11
+
+CREDENCIAIS PADRÃO DE ACESSO:
+- Usuário: admin
+- Senha:   Link2026@
+
+===================================================================
+COMO ENVIAR UM LINK NO WHATSAPP PARA ABRIR NO CELULAR / SMARTPHONE:
+Se você deseja que o destinatário abra o sistema direto no smartphone
+(Android ou iPhone) ou no navegador sem precisar baixar o arquivo ZIP:
+
+Basta subir a pasta "frontend" gratuitamente em serviços como:
+1. Netlify Drop (https://app.netlify.com/drop) — Arraste a pasta e receba um link instantâneo https://...
+2. Vercel (https://vercel.com) — Gratuito com 1 clique
+3. GitHub Pages (https://pages.github.com)
+
+Dessa forma, basta colar o link no WhatsApp e qualquer pessoa acessa
+instantaneamente de qualquer lugar!
+===================================================================

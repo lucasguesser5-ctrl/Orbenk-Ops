@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBENK OPS — Centro de Registro Tático de Ocorrências</title>
+  <link rel="stylesheet" href="assets/css/military.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body class="tactical-bg scanlines" style="padding-bottom: 90px;">
+  <!-- Mapa Tático em Movimento Omnipresente no Fundo da Tela -->
+  <div class="dashboard-map-stage" id="bg-map-stage">
+    <div id="ambient-bg-map"></div>
+  </div>
+  <div class="dashboard-map-vignette"></div>
+
+  <div class="app-layout">
+    <!-- Sidebar Slot -->
+    <div id="sidebar-slot"></div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Topbar Slot -->
+      <div id="topbar-slot"></div>
+
+      <main class="page-content">
+        <!-- CABEÇALHO TÁTICO & INDICADORES DE MISSÃO -->
+        <div style="margin-bottom: 20px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div class="label-military">CENTRO DE OPERAÇÕES INTEGRADO // GESTÃO DE CRISE & PÓS-TRAUMA</div>
+              <h1 class="text-2xl font-mono text-cyan glow-cyan" id="page-title">REGISTRO TÁTICO DE OCORRÊNCIA</h1>
+              <div class="text-xs text-muted" id="page-subtitle">Plataforma institucional para triagem, coleta de evidências e lavratura pericial</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <div style="text-align:right;">
+                <span class="label-military">SEVERIDADE OPERACIONAL</span>
+                <div id="header-threat-badge" class="threat-level-badge threat-normal">NÍVEL 4 · ROTINA</div>
+              </div>
+              <div style="text-align:right; border-left:1px solid var(--border); padding-left:16px;">
+                <span class="label-military">COMPLETUDE</span>
+                <div class="text-lg font-mono text-cyan" id="progress-pct">0%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Progresso Superior -->
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- NAVEGADOR DE ESTÁGIOS DA MISSÃO (TACTICAL STEPPER) -->
+        <div class="tactical-stepper-wrap">
+          <div class="stepper-top-controls">
+            <div class="text-xs font-mono text-muted">
+              ESTÁGIO ATUAL: <span id="current-stage-name" class="text-cyan font-bold">01 // DESPACHO & LOCALIZAÇÃO</span>
+            </div>
+            <!-- Alternador de Modo de Visualização -->
+            <div class="view-mode-toggle">
+              <button type="button" class="view-mode-btn active" id="btn-mode-stepper" title="Preenchimento focado passo a passo">
+                🎯 Modo Focado
+              </button>
+              <button type="button" class="view-mode-btn" id="btn-mode-all" title="Exibe todos os estágios contínuos">
+                📜 Visão Completa
+              </button>
+            </div>
+          </div>
+
+          <div class="tactical-stepper" id="tactical-stepper">
+            <div class="step-tab active" data-stage="1">
+              <span class="step-badge">01</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 1</span>
+                <span class="step-name">Despacho & Local</span>
+              </div>
+            </div>
+            <div class="step-tab" data-stage="2">
+              <span class="step-badge">02</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 2</span>
+                <span class="step-name">Tempos & Alarme</span>
+              </div>
+            </div>
+            <div class="step-tab" data-stage="3">
+              <span class="step-badge">03</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 3</span>
+                <span class="step-name">Tipo do Evento</span>
+              </div>
+            </div>
+            <div class="step-tab" data-stage="4">
+              <span class="step-badge">04</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 4</span>
+                <span class="step-name">Pessoas & Armas</span>
+              </div>
+            </div>
+            <div class="step-tab" data-stage="5">
+              <span class="step-badge">05</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 5</span>
+                <span class="step-name">Polícia & B.O.</span>
+              </div>
+            </div>
+            <div class="step-tab" data-stage="6">
+              <span class="step-badge">06</span>
+              <div class="step-info">
+                <span class="step-num-label">Fase 6</span>
+                <span class="step-name">Relato & Provas</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO TÁTICO: GRID COCKPIT + HUD LATERAL -->
+        <form id="occurrence-form" onsubmit="return false;">
+          <input type="hidden" id="lat-hidden" />
+          <input type="hidden" id="lon-hidden" />
+
+          <div class="tactical-cockpit-layout" id="form-layout-container">
+            <!-- COLUNA PRINCIPAL: ESTÁGIOS DA MISSÃO -->
+            <div class="tactical-stages-container">
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 01: DESPACHO, CLIENTE & GEORREFERENCIAMENTO
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane active" id="stage-pane-1">
+                <!-- Card 1: Identificação -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">01.1</span>
+                      <div>
+                        <div class="stage-card-title">Identificação do Registro & Operador</div>
+                        <div class="stage-card-desc">Protocolo operacional e vinculação de serviço</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="grid-3">
+                      <div class="field">
+                        <label class="field-label" for="protocolo">Protocolo Tático / Nº do Chamado</label>
+                        <input type="text" id="protocolo" class="font-mono text-cyan" placeholder="Ex: OBK-2026-0001" title="Digite ou personalize o número de protocolo" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="operador">Operador Responsável</label>
+                        <input type="text" id="operador" placeholder="Operador de monitoramento" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="turno">Turno de Serviço</label>
+                        <select id="turno">
+                          <option value="">Selecione o Turno</option>
+                          <option value="Diurno">☀️ Diurno (06:00 - 18:00)</option>
+                          <option value="Noturno">🌙 Noturno (18:00 - 06:00)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 2: Cliente & Georreferenciamento -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">01.2</span>
+                      <div>
+                        <div class="stage-card-title">Cliente, Contato & Georreferenciamento Tático</div>
+                        <div class="stage-card-desc">Localização geográfica, coordenadas e mapas de situação</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="grid-2">
+                      <div class="field">
+                        <label class="field-label" for="cliente">Cliente / Razão Social / Unidade</label>
+                        <input type="text" id="cliente" placeholder="Ex: Hipermercado Angeloni Joinville Sul" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="cidade">Cidade / Regional</label>
+                        <input type="text" id="cidade" value="Joinville, SC" />
+                      </div>
+                    </div>
+
+                    <!-- Autocomplete de Endereço com Busca Rápida -->
+                    <div class="field autocomplete-wrap" style="position:relative;">
+                      <label class="field-label" for="endereco">Endereço Completo (Geocodificação Automática)</label>
+                      <input type="text" id="endereco" placeholder="Digite rua, número ou bairro para posicionar no radar..." autocomplete="off" />
+                      <div id="suggestionsBox" class="suggestions-box" style="display:none;"></div>
+                    </div>
+
+                    <div class="grid-2">
+                      <div class="field">
+                        <label class="field-label" for="contatoNome">Contato do Cliente no Local</label>
+                        <input type="text" id="contatoNome" placeholder="Ex: Síndico Carlos Eduardo / Gerente Silva" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="contatoTel">Telefone / Rádio do Contato</label>
+                        <input type="text" id="contatoTel" placeholder="(47) 99999-0000" />
+                      </div>
+                    </div>
+
+                    <!-- Módulo de Telemetria Meteorológica em Tempo Real (Open-Meteo & Data Viz) -->
+                    <div id="weather-panel-card" class="weather-telemetry-panel">
+                      <div class="weather-header">
+                        <div class="weather-title">
+                          <span class="status-dot green"></span>
+                          <span>🛰 TELEMETRIA METEOROLÓGICA OPERACIONAL // SAT-LINK AO VIVO</span>
+                        </div>
+                        <div class="weather-location-pill" id="weather-location-name">
+                          Joinville, SC (Território Nacional)
+                        </div>
+                      </div>
+                      
+                      <div class="weather-data-hierarchy">
+                        <!-- Métrica Primária: Card Hero com Vetores SVG Dinâmicos -->
+                        <div class="weather-hero-card">
+                          <div class="weather-svg-container" id="weather-icon-svg">
+                            <svg class="weather-svg weather-svg-sunny" viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2">
+                              <circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.2"></circle>
+                              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                            </svg>
+                          </div>
+                          <div class="weather-hero-metrics">
+                            <div class="weather-temp-wrap">
+                              <span class="weather-temp-large" id="weather-temp">--°C</span>
+                              <span class="text-xs text-muted font-mono">SENSOR POSTO</span>
+                            </div>
+                            <div class="weather-condition-badge" id="weather-condition">Sincronizando satélites meteorológicos...</div>
+                            <div>
+                              <span class="weather-road-impact-pill" id="weather-road-impact">🚗 Pista Seca · SLA Preservado</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Métricas Secundárias: Grid com Microinterações e Data Viz -->
+                        <div class="weather-secondary-grid">
+                          <!-- Métrica 1: Umidade -->
+                          <div class="weather-metric-card">
+                            <div class="metric-card-top">
+                              <span class="metric-label">Umidade</span>
+                              <span class="metric-icon">💧</span>
+                            </div>
+                            <div class="metric-value-wrap">
+                              <div class="metric-val text-green" id="weather-humidity">--%</div>
+                              <div class="metric-sub" id="weather-humidity-sub">Ideal p/ Operação</div>
+                            </div>
+                            <div class="metric-mini-bar">
+                              <div class="metric-mini-fill" id="weather-humidity-bar" style="width: 70%; background: var(--accent-green);"></div>
+                            </div>
+                          </div>
+
+                          <!-- Métrica 2: Vento -->
+                          <div class="weather-metric-card">
+                            <div class="metric-card-top">
+                              <span class="metric-label">Vento</span>
+                              <span class="metric-icon">💨</span>
+                            </div>
+                            <div class="metric-value-wrap">
+                              <div class="metric-val text-amber" id="weather-wind">-- km/h</div>
+                              <div class="metric-sub" id="weather-wind-sub">Brisa Moderada</div>
+                            </div>
+                            <div class="metric-mini-bar">
+                              <div class="metric-mini-fill" id="weather-wind-bar" style="width: 35%; background: var(--accent-amber);"></div>
+                            </div>
+                          </div>
+
+                          <!-- Métrica 3: Chuva / Precipitação -->
+                          <div class="weather-metric-card">
+                            <div class="metric-card-top">
+                              <span class="metric-label">Chuva</span>
+                              <span class="metric-icon">🌧️</span>
+                            </div>
+                            <div class="metric-value-wrap">
+                              <div class="metric-val text-cyan" id="weather-rain">0.0 mm</div>
+                              <div class="metric-sub" id="weather-rain-sub">Sem Acúmulo</div>
+                            </div>
+                            <div class="metric-mini-bar">
+                              <div class="metric-mini-fill" id="weather-rain-bar" style="width: 0%; background: var(--accent-cyan);"></div>
+                            </div>
+                          </div>
+
+                          <!-- Métrica 4: Previsão & Tendência Tática -->
+                          <div class="weather-metric-card">
+                            <div class="metric-card-top">
+                              <span class="metric-label">Tendência</span>
+                              <span class="metric-icon">⏱️</span>
+                            </div>
+                            <div class="weather-trend-strip" id="weather-trend-container">
+                              <div class="weather-trend-step">+2h: --°C</div>
+                              <div class="weather-trend-step">+4h: --°C</div>
+                              <div class="weather-trend-step">+6h: --°C</div>
+                            </div>
+                            <div class="metric-sub" style="margin-top:5px; text-align:center;">Estabilidade Atmosférica</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="weather-alert-strip" id="weather-alert">
+                        <span>ℹ️</span> <span id="weather-alert-text">Condições ideais de visibilidade e deslocamento tático de viaturas no posto.</span>
+                      </div>
+                    </div>
+
+                    <!-- Módulo de Mapas Multi-Visor -->
+                    <div class="map-container" style="margin-top: 14px;">
+                      <div class="map-title">
+                        <span>📡 VISOR CARTOGRÁFICO & SATÉLITE MULTI-ESCALA</span>
+                      </div>
+                      <div id="mapaPrincipal" class="map-view map-main"></div>
+                      <div class="maps-row" style="padding: 10px;">
+                        <div>
+                          <div class="text-xs text-muted" style="margin-bottom:4px; font-weight:700;">🛰 VISÃO DE SATÉLITE // ORTOFOTO</div>
+                          <div id="mapaSatelite" class="map-view map-sub"></div>
+                        </div>
+                        <div>
+                          <div class="text-xs text-muted" style="margin-bottom:4px; font-weight:700;">🗺 RELEVO TOPOGRÁFICO & VIAS</div>
+                          <div id="mapaTerreno" class="map-view map-sub"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 3: Serviços Contratados -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">01.3</span>
+                      <div>
+                        <div class="stage-card-title">Serviços Contratados no Posto</div>
+                        <div class="stage-card-desc">Selecione todas as modalidades ativas no cliente</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="chip-group" id="chips-servicos">
+                      <span class="chip" data-group="servico" data-value="Alarme Monitorado">📡 Alarme Monitorado</span>
+                      <span class="chip" data-group="servico" data-value="Vigilância Armada">🛡 Vigilância Armada</span>
+                      <span class="chip" data-group="servico" data-value="Vigilância Desarmada">👮 Vigilância Desarmada</span>
+                      <span class="chip" data-group="servico" data-value="CFTV / Câmeras IP">📹 CFTV com Gravação Remota</span>
+                      <span class="chip" data-group="servico" data-value="Ronda Motorizada">🏍 Ronda Motorizada</span>
+                      <span class="chip" data-group="servico" data-value="Controle de Acesso">🚪 Controle de Acesso Biométrico</span>
+                      <span class="chip" data-group="servico" data-value="Portaria Remota">🏢 Portaria Remota</span>
+                      <span class="chip" data-group="servico" data-value="Proteção Perimetral">⚡ Cerca Elétrica / Barreira Infravermelha</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Navegação de Rodapé do Estágio 1 -->
+                <div class="stage-nav-footer">
+                  <div></div>
+                  <button type="button" class="btn btn-primary" onclick="window.goToStage(2)">
+                    AVANÇAR PARA CRONOMETRIA & ALARME →
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 02: CRONOMETRIA, SLA & SISTEMA DE ALARME
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane" id="stage-pane-2">
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">02.1</span>
+                      <div>
+                        <div class="stage-card-title">Cronometria Operacional & Auditoria de SLA Orbenk</div>
+                        <div class="stage-card-desc">Cálculo de tempo de reação da equipe móvel (Meta Orbenk: ≤ 12 min)</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="grid-2" style="margin-bottom:16px;">
+                      <div class="field">
+                        <label class="field-label" for="dataOcorrencia">Data do Incidente</label>
+                        <input type="date" id="dataOcorrencia" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="horaOcorrencia">Horário Estimado do Evento</label>
+                        <input type="time" id="horaOcorrencia" />
+                      </div>
+                    </div>
+
+                    <div class="grid-2" style="margin-bottom:16px;">
+                      <div class="field">
+                        <label class="field-label">Disparo do Alarme Confirmado?</label>
+                        <div class="tactical-toggle-group" data-radio="disparo">
+                          <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO DISPAROU</button>
+                          <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SIM, HOUVE DISPARO</button>
+                        </div>
+                        <!-- Rádios nativos mantidos ocultos para compatibilidade -->
+                        <div style="display:none;">
+                          <input type="radio" name="disparo" id="disp-sim" value="Sim" />
+                          <input type="radio" name="disparo" id="disp-nao" value="Não" checked />
+                        </div>
+                      </div>
+
+                      <div class="field cond-disparo hidden">
+                        <label class="field-label" for="horaDisparo">Horário Exato do Disparo (Central)</label>
+                        <input type="time" id="horaDisparo" />
+                      </div>
+                    </div>
+
+                    <div class="grid-2">
+                      <div class="field">
+                        <label class="field-label" for="horaAtendente">Chegada do Atendente Tático no Local</label>
+                        <input type="time" id="horaAtendente" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="tempoTotal">Tempo Total de Resposta (Minutos)</label>
+                        <input type="text" id="tempoTotal" class="font-mono text-cyan" placeholder="Ex: 8 min" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 2: Zonas de Alarme e Status -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">02.2</span>
+                      <div>
+                        <div class="stage-card-title">Parâmetros do Sistema de Alarme & Zonas</div>
+                        <div class="stage-card-desc">Estado da central no momento do evento e setores acionados</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="grid-2">
+                      <div class="field">
+                        <label class="field-label">Status da Central no Momento do Fato</label>
+                        <div class="tactical-toggle-group" data-radio="sistemaAlarme">
+                          <button type="button" class="tactical-toggle-btn active-sim" data-val="Armado"><span class="led led-green"></span> ARMADO</button>
+                          <button type="button" class="tactical-toggle-btn" data-val="Desarmado"><span class="led led-amber"></span> DESARMADO</button>
+                          <button type="button" class="tactical-toggle-btn" data-val="Inoperante"><span class="led led-red"></span> INOPERANTE / FALHA</button>
+                        </div>
+                        <div style="display:none;">
+                          <input type="radio" name="sistemaAlarme" id="alm-arm" value="Armado" checked />
+                          <input type="radio" name="sistemaAlarme" id="alm-des" value="Desarmado" />
+                          <input type="radio" name="sistemaAlarme" id="alm-fal" value="Inoperante" />
+                        </div>
+                      </div>
+
+                      <div class="field">
+                        <label class="field-label" for="zonaDisparada">Zonas / Setores Violados</label>
+                        <input type="text" id="zonaDisparada" placeholder="Ex: Zona 04 (Sensor IVA Docas) / Zona 12 (Cofre)" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-nav-footer">
+                  <button type="button" class="btn btn-secondary" onclick="window.goToStage(1)">
+                    ← VOLTAR PARA DESPACHO
+                  </button>
+                  <button type="button" class="btn btn-primary" onclick="window.goToStage(3)">
+                    AVANÇAR PARA CLASSIFICAÇÃO TÁTICA →
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 03: CLASSIFICAÇÃO TÁTICA & AUTORIDADES POLICIAIS
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane" id="stage-pane-3">
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">03.1</span>
+                      <div>
+                        <div class="stage-card-title">Natureza & Tipologia do Incidente</div>
+                        <div class="stage-card-desc">Classificação operacional para triagem estatística e gestão de risco</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="chip-group" id="chips-tipos">
+                      <span class="chip" data-group="tipo" data-value="Disparo Sem Intrusão">🟢 Disparo Sem Violação</span>
+                      <span class="chip" data-group="tipo" data-value="Tentativa de Intrusão">🟡 Tentativa de Intrusão Perimetral</span>
+                      <span class="chip" data-group="tipo" data-value="Arrombamento Confirmado">🟠 Arrombamento / Dano Físico</span>
+                      <span class="chip" data-group="tipo" data-value="Furto Consumado">🟠 Furto Simples / Qualificado</span>
+                      <span class="chip" data-group="tipo" data-value="Roubo / Assalto a Mão Armada">🔴 Roubo / Assalto a Mão Armada</span>
+                      <span class="chip" data-group="tipo" data-value="Sequestro / Rendição de Funcionários">🔴 Rendição / Retenção de Vítimas</span>
+                      <span class="chip" data-group="tipo" data-value="Vandalismo / Sabotagem">⚠️ Vandalismo / Sabotagem Patrimonial</span>
+                      <span class="chip" data-group="tipo" data-value="Princípio de Incêndio">🔥 Incêndio / Sinistro Térmico</span>
+                      <span class="chip" data-group="tipo" data-value="Agressão Física">💥 Agressão Física / Vias de Fato</span>
+                      <span class="chip" data-group="tipo" data-value="Troca de Tiros / Confronto">🚨 Disparo de Arma de Fogo / Confronto</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">03.2</span>
+                      <div>
+                        <div class="stage-card-title">Forças Policiais & Órgãos de Emergência Acionados</div>
+                        <div class="stage-card-desc">Registro de acionamento das forças estaduais, federais e socorro</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="chip-group" id="chips-autoridades">
+                      <span class="chip" data-group="autoridade" data-value="Polícia Militar (190)">🚓 Polícia Militar (190)</span>
+                      <span class="chip" data-group="autoridade" data-value="Polícia Civil (197)">🕵️ Polícia Civil (197)</span>
+                      <span class="chip" data-group="autoridade" data-value="Polícia Federal (PF)">🏛 Polícia Federal (PF / DELESP)</span>
+                      <span class="chip" data-group="autoridade" data-value="Polícia Rodoviária Federal">🛣 Polícia Rodoviária Federal</span>
+                      <span class="chip" data-group="autoridade" data-value="Corpo de Bombeiros (193)">🚒 Corpo de Bombeiros (193)</span>
+                      <span class="chip" data-group="autoridade" data-value="SAMU (192)">🚑 SAMU / Resgate (192)</span>
+                      <span class="chip" data-group="autoridade" data-value="Guarda Municipal">🛡 Guarda Municipal</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-nav-footer">
+                  <button type="button" class="btn btn-secondary" onclick="window.goToStage(2)">
+                    ← VOLTAR PARA CRONOMETRIA
+                  </button>
+                  <button type="button" class="btn btn-primary" onclick="window.goToStage(4)">
+                    AVANÇAR PARA VÍTIMAS & EFETIVO →
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 04: MAPEAMENTO CLÍNICO & AUDITORIA DE EFETIVO
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane" id="stage-pane-4">
+                <!-- Vítimas -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">04.1</span>
+                      <div>
+                        <div class="stage-card-title">Mapeamento Clínico, Vítimas & Gravidade de Lesão</div>
+                        <div class="stage-card-desc">Quantificação rigorosa, grau de trauma físico e assistência de emergência</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="field" style="margin-bottom:16px;">
+                      <label class="field-label">Houve Vítimas no Local do Incidente?</label>
+                      <div class="tactical-toggle-group" data-radio="houveVitimas">
+                        <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO HOUVE VÍTIMAS</button>
+                        <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SIM, HOUVE VÍTIMAS</button>
+                      </div>
+                      <div style="display:none;">
+                        <input type="radio" name="houveVitimas" id="vit-sim" value="Sim" />
+                        <input type="radio" name="houveVitimas" id="vit-nao" value="Não" checked />
+                      </div>
+                    </div>
+
+                    <!-- Campos Condicionais de Vítimas -->
+                    <div class="cond-vitimas hidden">
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label" for="numVitimas">Total de Vítimas Quantificadas</label>
+                          <input type="number" id="numVitimas" min="1" value="1" class="font-mono text-red" />
+                        </div>
+                        <div class="field">
+                          <label class="field-label" for="gravidadeVitima">Grau de Gravidade Geral / Óbitos</label>
+                          <select id="gravidadeVitima">
+                            <option value="Leve (Escoriações / Lesão Superficial)">🟢 Leve (Escoriações / Sem Risco)</option>
+                            <option value="Moderada (Necessita Atendimento Ambulatorial)">🟡 Moderada (Atendimento Médico / Fraturas)</option>
+                            <option value="Grave (Risco Iminente de Vida / Traumatismo / UTI)">🟠 Grave (Risco de Vida / UTI / Balística)</option>
+                            <option value="Óbito Confirmado no Local">🔴 ÓBITO CONFIRMADO NO LOCAL</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label" for="meioAgressao">Meio Empregado na Agressão</label>
+                          <select id="meioAgressao">
+                            <option value="Arma de Fogo (Projétil Balístico)">Arma de Fogo (Projétil Balístico)</option>
+                            <option value="Arma Branca (Faca, Punhal, Perfurocortante)">Arma Branca (Lâmina / Perfurocortante)</option>
+                            <option value="Agressão Física / Objeto Contundente (Coronhada, Barra de Ferro)">Agressão Física / Coronhada / Barra</option>
+                            <option value="Asfixia Mecânica / Estrangulamento">Asfixia / Enforcamento</option>
+                            <option value="Agente Químico / Fogo">Queimadura / Agente Químico</option>
+                            <option value="Ameaça Verbal / Psicológica Sem Lesão Física">Ameaça Psicológica (Sem Lesão Física)</option>
+                          </select>
+                        </div>
+                        <div class="field">
+                          <label class="field-label" for="socorroMedico">Atendimento Pré-Hospitalar (APH) Acionado</label>
+                          <input type="text" id="socorroMedico" placeholder="Ex: SAMU VTR-04 / Bombeiros ASU-23" />
+                        </div>
+                      </div>
+
+                      <div class="field">
+                        <label class="field-label" for="hospitalDestino">Destino Hospitalar das Vítimas</label>
+                        <input type="text" id="hospitalDestino" placeholder="Ex: Hospital Municipal São José / Hospital Regional Hans Dieter Schmidt" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Vigilante e Efetivo (Lei 7.102/83) -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">04.2</span>
+                      <div>
+                        <div class="stage-card-title">Auditoria de Segurança Privada & Armamento (Lei Federal nº 7.102/1983)</div>
+                        <div class="stage-card-desc">Controle de armamento funcional, rendição, agressão e obrigações da Polícia Federal</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="field" style="margin-bottom:16px;">
+                      <label class="field-label">Posto Operacional com Efetivo de Vigilantes no Local?</label>
+                      <div class="tactical-toggle-group" data-radio="vigNoLocal">
+                        <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO (POSTO ELETRÔNICO / SEM VIGILANTE)</button>
+                        <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-green"></span> SIM (COM VIGILANTE NO LOCAL)</button>
+                      </div>
+                      <div style="display:none;">
+                        <input type="radio" name="vigNoLocal" id="vig-sim" value="Sim" />
+                        <input type="radio" name="vigNoLocal" id="vig-nao" value="Não" checked />
+                      </div>
+                    </div>
+
+                    <!-- Campos Condicionais do Vigilante -->
+                    <div class="cond-vig hidden">
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label" for="nomeVigilante">Nome Completo / Matrícula / CNV</label>
+                          <input type="text" id="nomeVigilante" placeholder="Ex: João da Silva — Matrícula 44102 — CNV 982314" />
+                        </div>
+                        <div class="field">
+                          <label class="field-label" for="guardCount">Efetivo de Vigilantes de Serviço</label>
+                          <input type="number" id="guardCount" min="1" value="1" class="font-mono text-cyan" />
+                        </div>
+                      </div>
+
+                      <div class="grid-2" style="margin-bottom:16px;">
+                        <div class="field">
+                          <label class="field-label">Vigilante Rendido pelos Suspeitos?</label>
+                          <div class="tactical-toggle-group" data-radio="vigRendido">
+                            <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO</button>
+                            <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SIM, RENDIDO</button>
+                          </div>
+                          <div style="display:none;">
+                            <input type="radio" name="vigRendido" id="vrend-sim" value="Sim" />
+                            <input type="radio" name="vigRendido" id="vrend-nao" value="Não" checked />
+                          </div>
+                        </div>
+
+                        <div class="field">
+                          <label class="field-label">Vigilante Sofreu Agressão / Lesão?</label>
+                          <div class="tactical-toggle-group" data-radio="guardAssaulted">
+                            <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO (ILESO)</button>
+                            <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SIM, AGREDIDO</button>
+                          </div>
+                          <div style="display:none;">
+                            <input type="radio" name="guardAssaulted" id="vagr-sim" value="Sim" />
+                            <input type="radio" name="guardAssaulted" id="vagr-nao" value="Não" checked />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="grid-2" style="margin-bottom:16px;">
+                        <div class="field">
+                          <label class="field-label" for="guardInjurySeverity">Gravidade da Lesão do Vigilante</label>
+                          <select id="guardInjurySeverity">
+                            <option value="Ileso">Ileso (Sem lesões corporais)</option>
+                            <option value="Leve (Escoriações / Hematomas)">Leve (Escoriações / Hematomas)</option>
+                            <option value="Moderada (Fraturas / Lesão Contusa)">Moderada (Fratura / Sutura)</option>
+                            <option value="Grave (Internação Hospitalar / UTI)">Grave (Risco de Vida / UTI)</option>
+                            <option value="Óbito em Serviço">ÓBITO EM SERVIÇO</option>
+                          </select>
+                        </div>
+
+                        <div class="field">
+                          <label class="field-label">Disparos de Arma de Fogo / Troca de Tiros?</label>
+                          <div class="tactical-toggle-group" data-radio="guardWeaponFired">
+                            <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO HOUVE DISPAROS</button>
+                            <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SIM, HOUVE DISPAROS</button>
+                          </div>
+                          <div style="display:none;">
+                            <input type="radio" name="guardWeaponFired" id="vdisp-sim" value="Sim" />
+                            <input type="radio" name="guardWeaponFired" id="vdisp-nao" value="Não" checked />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label">Subtração de Colete Balístico?</label>
+                          <div class="tactical-toggle-group" data-radio="vestStolen">
+                            <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> PRESERVADO</button>
+                            <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> SUBTRAÍDO</button>
+                          </div>
+                          <div style="display:none;">
+                            <input type="radio" name="vestStolen" id="vcol-sim" value="Sim" />
+                            <input type="radio" name="vestStolen" id="vcol-nao" value="Não" checked />
+                          </div>
+                        </div>
+
+                        <div class="field">
+                          <label class="field-label">Subtração de Armamento Funcional?</label>
+                          <div class="tactical-toggle-group" data-radio="weaponStolen">
+                            <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> PRESERVADO</button>
+                            <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-red"></span> ⚠ SUBTRAÍDO</button>
+                          </div>
+                          <div style="display:none;">
+                            <input type="radio" name="weaponStolen" id="varm-sim" value="Sim" />
+                            <input type="radio" name="weaponStolen" id="varm-nao" value="Não" checked />
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Subtração de Armamento Alerta Legal -->
+                      <div class="field cond-arma-subtraida hidden" style="margin-top:14px; background:rgba(255,59,59,0.08); border:1px solid var(--accent-red); padding:14px; border-radius:var(--radius);">
+                        <div class="text-xs text-red font-bold" style="letter-spacing:1px; margin-bottom:6px;">
+                          🚨 COMUNICAÇÃO OBRIGATÓRIA À POLÍCIA FEDERAL (ART. 10 DA LEI 7.102/1983)
+                        </div>
+                        <label class="field-label" for="weaponStolenDetails">Discriminação Completa do Armamento Subtraído (Calibre, Marca, Modelo, Nº de Série e Qtd Munições)</label>
+                        <textarea id="weaponStolenDetails" style="min-height:75px;" placeholder="Ex: 01 Revólver Taurus Calibre .38 SPL, 6 tiros, Nº de Série QD891234, com 12 cartuchos intactos CBC."></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-nav-footer">
+                  <button type="button" class="btn btn-secondary" onclick="window.goToStage(3)">
+                    ← VOLTAR PARA CLASSIFICAÇÃO
+                  </button>
+                  <button type="button" class="btn btn-primary" onclick="window.goToStage(5)">
+                    AVANÇAR PARA PERÍCIA & JURÍDICO →
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 05: PERÍCIA OFICIAL & AMPARO JURÍDICO (CPP)
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane" id="stage-pane-5">
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">05.1</span>
+                      <div>
+                        <div class="stage-card-title">Preservação de Local de Crime & Cadeia de Custódia (Arts. 6º e 158-A a 158-F do CPP)</div>
+                        <div class="stage-card-desc">Salvaguarda de vestígios para validade probatória em inquérito e instrução criminal</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="grid-2" style="margin-bottom:16px;">
+                      <div class="field">
+                        <label class="field-label">Local de Crime Isolado e Preservado (Art. 6º, I do CPP)?</label>
+                        <div class="tactical-toggle-group" data-radio="crimeScenePreserved">
+                          <button type="button" class="tactical-toggle-btn active-sim" data-val="Sim"><span class="led led-green"></span> SIM, ISOLADO</button>
+                          <button type="button" class="tactical-toggle-btn" data-val="Não"><span class="led led-red"></span> NÃO / PREJUDICADO</button>
+                        </div>
+                        <div style="display:none;">
+                          <input type="radio" name="crimeScenePreserved" id="csp-sim" value="Sim" checked />
+                          <input type="radio" name="crimeScenePreserved" id="csp-nao" value="Não" />
+                        </div>
+                      </div>
+
+                      <div class="field">
+                        <label class="field-label">Perícia Oficial (Polícia Científica / IGP) Acionada?</label>
+                        <div class="tactical-toggle-group" data-radio="forensicTeamCalled">
+                          <button type="button" class="tactical-toggle-btn active-nao" data-val="Não"><span class="led led-gray"></span> NÃO ACIONADA</button>
+                          <button type="button" class="tactical-toggle-btn" data-val="Sim"><span class="led led-green"></span> SIM, ACIONADA</button>
+                        </div>
+                        <div style="display:none;">
+                          <input type="radio" name="forensicTeamCalled" id="ftc-sim" value="Sim" />
+                          <input type="radio" name="forensicTeamCalled" id="ftc-nao" value="Não" checked />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="grid-2">
+                      <div class="field">
+                        <label class="field-label" for="policeStation">Delegacia de Polícia da Circunscrição</label>
+                        <input type="text" id="policeStation" placeholder="Ex: 1ª Delegacia de Polícia Civil de Joinville / Central de Flagrantes" />
+                      </div>
+                      <div class="field">
+                        <label class="field-label" for="policeOfficer">Autoridade Policial / Prefixo da Viatura</label>
+                        <input type="text" id="policeOfficer" placeholder="Ex: Delegado Dr. Marcos Vinícius / VTR PM-8491 (Sgt. Oliveira)" />
+                      </div>
+                    </div>
+
+                    <div class="field" style="margin-top:14px;">
+                      <label class="field-label" for="legalCustodyNotes">Termo de Fé Pública Funcional & Registro de Cadeia de Custódia Probatória</label>
+                      <textarea id="legalCustodyNotes" style="min-height:90px;" placeholder="Declaro, sob fé pública e responsabilidade funcional operacional, que as evidências materiais, fotos e registros georreferenciados foram preservados em estrita observância ao Art. 6º, I e aos Arts. 158-A a 158-F do Código de Processo Penal, mantendo sua idoneidade para instrução penal."></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Danos Materiais -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">05.2</span>
+                      <div>
+                        <div class="stage-card-title">Danos e Perdas Materiais Patrimoniais</div>
+                        <div class="stage-card-desc">Discriminação de bens danificados, arrombamentos e Boletim de Ocorrência</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="field">
+                      <label class="field-label" for="danosDesc">Discriminação Detalhada dos Danos e Bens Subtraídos</label>
+                      <textarea id="danosDesc" style="min-height:85px;" placeholder="Descreva portas rompidas, fiação cortada, cofres violados, equipamentos de informática ou mercadorias subtraídas..."></textarea>
+                    </div>
+
+                    <div class="field" style="max-width:320px;">
+                      <label class="field-label" for="numeroBO">Número do Boletim de Ocorrência (B.O.)</label>
+                      <input type="text" id="numeroBO" class="font-mono text-cyan" placeholder="Ex: 00412/2026-DP" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-nav-footer">
+                  <button type="button" class="btn btn-secondary" onclick="window.goToStage(4)">
+                    ← VOLTAR PARA VÍTIMAS & EFETIVO
+                  </button>
+                  <button type="button" class="btn btn-primary" onclick="window.goToStage(6)">
+                    AVANÇAR PARA EVIDÊNCIAS & RELATO →
+                  </button>
+                </div>
+              </div>
+
+              <!-- ══════════════════════════════════════════════════════════
+                   STAGE 06: EVIDÊNCIAS, TESTEMUNHAS & NARRATIVA TÁTICA
+                   ══════════════════════════════════════════════════════════ -->
+              <div class="tactical-stage-pane" id="stage-pane-6">
+                <!-- Dropzone de Imagens -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">06.1</span>
+                      <div>
+                        <div class="stage-card-title">Registro Fotográfico Pericial & Evidências Digitais</div>
+                        <div class="stage-card-desc">Fotografias de portas, vestígios balísticos, veículos e danos (Máx. 10MB/foto)</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <div class="dropzone" id="dropzone">
+                      <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp" />
+                      <div class="dropzone-icon">📷</div>
+                      <div class="dropzone-text">ARRASTE AS EVIDÊNCIAS FOTOGRÁFICAS OU CLIQUE PARA SELECIONAR</div>
+                      <div class="dropzone-sub">Formatos aceitos: JPG, PNG, WEBP (resolução de alta fidelidade)</div>
+                    </div>
+                    <div class="image-grid" id="imageGrid"></div>
+                  </div>
+                </div>
+
+                <!-- Testemunhas -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">06.2</span>
+                      <div>
+                        <div class="stage-card-title">Testemunhas e Pessoas Envolvidas Catalogadas</div>
+                        <div class="stage-card-desc">Cadastro de contatos no local para fins de depoimento formal</div>
+                      </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="window.addWitness()">
+                      ➕ Adicionar Testemunha
+                    </button>
+                  </div>
+                  <div class="stage-card-body">
+                    <div id="witnessList"></div>
+                  </div>
+                </div>
+
+                <!-- Relato Operacional dos Fatos -->
+                <div class="stage-card">
+                  <div class="stage-card-header">
+                    <div class="stage-card-title-wrap">
+                      <span class="stage-card-num">06.3</span>
+                      <div>
+                        <div class="stage-card-title">Relato Operacional dos Fatos & Providências Adotadas</div>
+                        <div class="stage-card-desc">Narrativa cronológica, circunstanciada e com amparo pericial</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stage-card-body">
+                    <!-- Barra de Assistente com Modelos Táticos Prontos -->
+                    <div class="narrative-assist-bar">
+                      <span class="narrative-assist-title">⚡ MODELOS PRONTOS:</span>
+                      <button type="button" class="template-btn" onclick="window.applyNarrativeTemplate('alarme_falso')">
+                        📄 Disparo Sem Violação
+                      </button>
+                      <button type="button" class="template-btn" onclick="window.applyNarrativeTemplate('intrusao_repelida')">
+                        🚨 Tentativa de Intrusão
+                      </button>
+                      <button type="button" class="template-btn" onclick="window.applyNarrativeTemplate('assalto_rendicao')">
+                        ⚠️ Roubo / Rendição
+                      </button>
+                      <button type="button" class="template-btn" onclick="window.applyNarrativeTemplate('confronto_armado')">
+                        💥 Confronto Armado
+                      </button>
+                    </div>
+
+                    <div class="field">
+                      <textarea id="relato" style="min-height: 220px;" placeholder="Descreva detalhadamente o evento:&#10;1. Circunstâncias do acionamento e rota de deslocamento;&#10;2. Constatações visuais imediatas na chegada ao posto;&#10;3. Medidas operacionais imediatas tomadas (socorro, cerco, preservação de local);&#10;4. Forças policiais presentes e providências finais adotadas."></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-nav-footer">
+                  <button type="button" class="btn btn-secondary" onclick="window.goToStage(5)">
+                    ← VOLTAR PARA PERÍCIA & JURÍDICO
+                  </button>
+                  <button type="button" class="btn btn-primary" id="btn-finish-stage" onclick="document.getElementById('btn-save').click()">
+                    💾 FINALIZAR & SALVAR OCORRÊNCIA
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <!-- BARRA INFERIOR FIXA DE CONTROLE -->
+  <div class="bottom-bar">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <span class="label-military" style="margin:0;">STATUS DA OCORRÊNCIA:</span>
+      <select id="status-select" style="width:180px; padding:6px 10px; font-size:12px; font-weight:700;">
+        <option value="em_andamento">🔴 EM ANDAMENTO</option>
+        <option value="concluida">🟢 CONCLUÍDA</option>
+        <option value="arquivada">⚪ ARQUIVADA</option>
+      </select>
+    </div>
+
+    <div class="bottom-bar-actions">
+      <button type="button" class="btn btn-ghost" id="btn-cancel">✖ CANCELAR</button>
+      <button type="button" class="btn btn-secondary" id="btn-pdf">🖨 LAUDO JURÍDICO PDF</button>
+      <button type="button" class="btn btn-primary" id="btn-save">💾 SALVAR OCORRÊNCIA</button>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/form.js"></script>
+</body>
+</html>

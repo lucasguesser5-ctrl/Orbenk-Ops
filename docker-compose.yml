@@ -1,0 +1,20 @@
+version: '3.9'
+services:
+  api:
+    build: ./backend
+    container_name: orbenk-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/orbenk.db:/app/orbenk.db
+      - ./frontend:/app/frontend
+    environment:
+      - SECRET_KEY=orbenk-super-secret-key-change-in-production
+      - DATABASE_URL=sqlite:///./orbenk.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBENK OPS — Dossier da Ocorrência</title>
+  <link rel="stylesheet" href="assets/css/military.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="tactical-bg scanlines">
+  <!-- Mapa Tático em Movimento Omnipresente no Fundo da Tela -->
+  <div class="dashboard-map-stage" id="bg-map-stage">
+    <div id="ambient-bg-map"></div>
+  </div>
+  <div class="dashboard-map-vignette"></div>
+
+  <div class="app-layout">
+    <!-- Sidebar Slot -->
+    <div id="sidebar-slot"></div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Topbar Slot -->
+      <div id="topbar-slot"></div>
+
+      <main class="page-content" id="content">
+        <!-- Top Bar de Ações e Protocolo -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:24px; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div class="label-military">DOSSIER TÁTICO OPERACIONAL</div>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+              <h1 class="text-3xl font-mono text-cyan glow-cyan" id="occ-protocol">OBK-....-....</h1>
+              <div id="occ-status-badge"></div>
+            </div>
+            <div class="text-xs text-muted" id="occ-created">Carregando registro...</div>
+          </div>
+
+          <!-- Botões de Ação -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="dashboard.html" class="btn btn-ghost btn-sm">‹ VOLTAR AO PAINEL</a>
+            <button type="button" class="btn btn-cyan btn-sm" id="btn-pdf">🖨 EMITIR PDF OFICIAL</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-edit">✏ EDITAR DADOS</button>
+            <button type="button" class="btn btn-ghost btn-sm supervisor-only" id="btn-archive">▣ ARQUIVAR</button>
+            <button type="button" class="btn btn-danger btn-sm supervisor-only" id="btn-delete">✖ EXCLUIR</button>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
+          <!-- Coluna Esquerda: Dados Operacionais Completos -->
+          <div>
+            <!-- Bloco 1: Identificação -->
+            <div class="detail-section">
+              <div class="detail-section-title">01 // IDENTIFICAÇÃO E OPERAÇÃO</div>
+              <div class="detail-grid">
+                <div>
+                  <div class="detail-field-label">Protocolo</div>
+                  <div class="detail-field-value mono" id="r-protocolo">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Operador Responsável</div>
+                  <div class="detail-field-value" id="r-operador">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Turno</div>
+                  <div class="detail-field-value" id="r-turno">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Data e Hora do Evento</div>
+                  <div class="detail-field-value" id="r-datahora">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 2: Cliente e Localização -->
+            <div class="detail-section">
+              <div class="detail-section-title">02 // CLIENTE E LOCALIZAÇÃO</div>
+              <div class="detail-grid">
+                <div>
+                  <div class="detail-field-label">Cliente / Razão Social</div>
+                  <div class="detail-field-value text-cyan" id="r-cliente">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Cidade / Regional</div>
+                  <div class="detail-field-value" id="r-cidade">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Endereço Completo</div>
+                  <div class="detail-field-value" id="r-endereco">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Contato no Local</div>
+                  <div class="detail-field-value" id="r-contato">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Coordenadas GPS</div>
+                  <div class="detail-field-value mono text-xs" id="r-coords">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 3: Classificação e Alarme -->
+            <div class="detail-section">
+              <div class="detail-section-title">03 // CLASSIFICAÇÃO, SISTEMA E PARÂMETROS</div>
+              <div class="detail-grid">
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Serviços Contratados</div>
+                  <div class="detail-field-value" id="r-servicos">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Classificação da Ocorrência</div>
+                  <div class="detail-field-value" id="r-tipos">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Forças Policiais Acionadas</div>
+                  <div class="detail-field-value" id="r-autoridades">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Status do Alarme</div>
+                  <div class="detail-field-value" id="r-alarme">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Zona Violada</div>
+                  <div class="detail-field-value" id="r-zona">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Disparo do Alarme</div>
+                  <div class="detail-field-value" id="r-disparo">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Horário do Disparo</div>
+                  <div class="detail-field-value mono" id="r-hora-disparo">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Chegada do Atendente</div>
+                  <div class="detail-field-value mono" id="r-hora-cheg">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Tempo Total de Resposta</div>
+                  <div class="detail-field-value mono text-cyan" id="r-tempo-total">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Boletim de Ocorrência (B.O.)</div>
+                  <div class="detail-field-value mono text-amber" id="r-bo">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 4: Mapeamento Clínico e Vítimas -->
+            <div class="detail-section">
+              <div class="detail-section-title">04 // MAPEAMENTO CLÍNICO, QUANTIFICAÇÃO DE VÍTIMAS E GRAVIDADE</div>
+              <div class="detail-grid">
+                <div>
+                  <div class="detail-field-label">Constatação de Vítimas</div>
+                  <div class="detail-field-value" id="r-vitimas">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Total de Vítimas</div>
+                  <div class="detail-field-value mono text-red" id="r-vitimas-count">0</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Gravidade Geral / Óbitos</div>
+                  <div class="detail-field-value" id="r-vitimas-gravidade">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Meio Empregado na Agressão</div>
+                  <div class="detail-field-value" id="r-meio-agressao">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Atendimento Pré-Hospitalar & Destino</div>
+                  <div class="detail-field-value" id="r-socorro-info">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 5: Segurança Patrimonial // Vigilância (Lei 7.102/83) -->
+            <div class="detail-section">
+              <div class="detail-section-title">05 // SEGURANÇA PRIVADA // VIGILÂNCIA, ARMAMENTO E CONFRONTO (LEI 7.102/83)</div>
+              <div class="detail-grid">
+                <div>
+                  <div class="detail-field-label">Vigilante no Posto</div>
+                  <div class="detail-field-value" id="r-vig-posto">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Efetivo de Vigilantes</div>
+                  <div class="detail-field-value mono" id="r-vig-count">1</div>
+                </div>
+                <div style="grid-column: 1 / span 2;">
+                  <div class="detail-field-label">Nome / Matrícula / CNV</div>
+                  <div class="detail-field-value" id="r-vig-nome">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Vigilante Rendido?</div>
+                  <div class="detail-field-value" id="r-vig-rendido">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Agressão / Lesão Corporal</div>
+                  <div class="detail-field-value" id="r-vig-agredido">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Disparos de Arma / Confronto</div>
+                  <div class="detail-field-value" id="r-vig-disparos">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Subtração de Colete Balístico</div>
+                  <div class="detail-field-value" id="r-vig-colete">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Subtração de Armamento (Obrigação Polícia Federal)</div>
+                  <div class="detail-field-value text-red font-mono" id="r-vig-arma">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 6: Amparo Jurídico & Preservação Probatória -->
+            <div class="detail-section">
+              <div class="detail-section-title">06 // AMPARO JURÍDICO & PRESERVAÇÃO DE LOCAL (ARTS. 6º E 158-A DO CPP)</div>
+              <div class="detail-grid">
+                <div>
+                  <div class="detail-field-label">Local de Crime Preservado</div>
+                  <div class="detail-field-value text-green" id="r-local-preservado">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Perícia Oficial (IGP)</div>
+                  <div class="detail-field-value" id="r-pericia-oficial">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Delegacia de Circunscrição</div>
+                  <div class="detail-field-value" id="r-delegacia">—</div>
+                </div>
+                <div>
+                  <div class="detail-field-label">Autoridade / Prefixo VTR</div>
+                  <div class="detail-field-value" id="r-policial">—</div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <div class="detail-field-label">Cadeia de Custódia Probatória</div>
+                  <div class="detail-field-value" id="r-custodia">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bloco 7: Danos Materiais -->
+            <div class="detail-section" id="sec-danos" style="display:none;">
+              <div class="detail-section-title">07 // DANOS E PERDAS MATERIAIS</div>
+              <div class="detail-narrative" id="r-danos">—</div>
+            </div>
+
+            <!-- Bloco 8: Testemunhas -->
+            <div class="detail-section" id="sec-testemunhas" style="display:none;">
+              <div class="detail-section-title">08 // TESTEMUNHAS E DEPOIMENTOS CATALOGADOS</div>
+              <table class="tactical-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>NOME COMPLETO</th>
+                    <th>CONTATO TELEFÔNICO</th>
+                    <th>DOCUMENTO</th>
+                  </tr>
+                </thead>
+                <tbody id="witnesses-tbody"></tbody>
+              </table>
+            </div>
+
+            <!-- Bloco 9: Relato Completo -->
+            <div class="detail-section">
+              <div class="detail-section-title">09 // RELATO CRONOLÓGICO DOS FATOS E PROVIDÊNCIAS</div>
+              <div class="detail-narrative" id="r-relato">—</div>
+            </div>
+
+            <!-- Bloco 10: Homologação e Assinatura Digital do Operador -->
+            <div class="signature-card" id="sec-assinatura">
+              <div class="signature-card-header">
+                <div class="signature-title">
+                  <span>✍ 10 // HOMOLOGAÇÃO &amp; ASSINATURA DIGITAL DO OPERADOR</span>
+                </div>
+                <div id="sig-status-badge" class="signature-status-pill pending">
+                  ● AGUARDANDO ASSINATURA
+                </div>
+              </div>
+
+              <div class="signature-declaration-box">
+                <strong>Termo de Fé Pública Operacional:</strong> O operador abaixo qualificado atesta, sob fé pública e responsabilidade profissional, a veracidade dos dados, cronometria e perícias relatadas neste laudo técnico, em estrita observância à Lei Federal nº 7.102/1983 e aos Arts. 6º e 158-A do Código de Processo Penal.
+              </div>
+
+              <div class="signature-grid">
+                <!-- Metadados da Assinatura -->
+                <div class="signature-meta-card">
+                  <div>
+                    <div class="detail-field-label">Operador Responsável</div>
+                    <div class="detail-field-value text-cyan font-bold" id="sig-operador-nome">—</div>
+                  </div>
+                  <div>
+                    <div class="detail-field-label">Matrícula / Identificação</div>
+                    <div class="detail-field-value mono" id="sig-matricula">OBK-OP-2026</div>
+                  </div>
+                  <div>
+                    <div class="detail-field-label">Data e Hora da Homologação</div>
+                    <div class="detail-field-value mono text-xs" id="sig-datahora">—</div>
+                  </div>
+                  <div>
+                    <div class="detail-field-label">Certificação Probatória</div>
+                    <div class="detail-field-value mono text-xs text-muted" id="sig-hash">SHA-256: VALIDAÇÃO ATIVA</div>
+                  </div>
+                </div>
+
+                <!-- Canvas de Assinatura -->
+                <div>
+                  <div class="signature-canvas-container">
+                    <canvas id="operator-sig-canvas" class="signature-canvas"></canvas>
+                    <div class="signature-watermark" id="sig-watermark">Desenhe sua assinatura aqui (Mouse ou Toque)</div>
+                  </div>
+
+                  <div class="signature-toolbar">
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-sig">🗑 Limpar</button>
+                      <button type="button" class="btn btn-ghost btn-sm" id="btn-auto-sig">⚡ Rubrica Digital</button>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-sign-pdf">
+                      🖨 ASSINAR &amp; EMITIR LAUDO JURÍDICO (PDF)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Coluna Direita: Mapa, Evidências e Cadeia de Custódia -->
+          <div>
+            <!-- Módulo de Mapa -->
+            <div class="panel mb-4" id="map-section" style="display:none;">
+              <div class="panel-header">
+                <span class="panel-title">LOCALIZAÇÃO TÁTICA</span>
+                <span class="status-dot green"></span>
+              </div>
+              <div id="detailMap" class="map-view" style="height: 280px; border-radius: var(--radius); border: 1px solid var(--border); position: relative; z-index: 1; isolation: isolate;"></div>
+            </div>
+
+            <!-- Módulo de Fotos / Evidências -->
+            <div class="panel mb-4" id="sec-imagens" style="display:none;">
+              <div class="panel-header">
+                <span class="panel-title">EVIDÊNCIAS FOTOGRÁFICAS</span>
+                <span class="badge badge-cyan">ALTA RESOLUÇÃO</span>
+              </div>
+              <div id="images-grid" class="image-grid"></div>
+            </div>
+
+            <!-- Módulo de Cadeia de Custódia / Trilha de Auditoria -->
+            <div class="panel" id="sec-audit-log">
+              <div class="panel-header">
+                <div>
+                  <span class="panel-title">CADEIA DE CUSTÓDIA &amp; AUDITORIA</span>
+                  <div class="text-xs text-muted">Rastreabilidade cronológica (Art. 158-A CPP)</div>
+                </div>
+                <span class="badge badge-green">AUDITADO</span>
+              </div>
+              <div id="audit-log-list" style="display:flex; flex-direction:column; gap:10px; font-size:12px;"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação de Exclusão -->
+  <div id="delete-modal" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-title text-red">CONFIRMAR EXCLUSÃO DE REGISTRO</div>
+      <div class="modal-body">
+        Tem certeza que deseja apagar permanentemente a ocorrência <strong id="delete-protocol" class="font-mono text-cyan"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal()">CANCELAR</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-delete">CONFIRMAR EXCLUSÃO</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script type="module" src="assets/js/occurrence.js"></script>
+</body>
+</html>

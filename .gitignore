@@ -1,0 +1,63 @@
+# Ambientes Virtuais Python
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Bancos de Dados Locais
+*.db
+*.sqlite
+*.sqlite3
+
+# Variáveis de Ambiente e Segredos
+.env
+.env.local
+.env.*.local
+
+# Uploads de Mídia Locais
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs e Diagnósticos
+*.log
+logs/
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Pacotes e Exportações Locais
+*.zip
+*.tar.gz
+*.rar
+ORBENK_OPS_SISTEMA_COMPLETO.*

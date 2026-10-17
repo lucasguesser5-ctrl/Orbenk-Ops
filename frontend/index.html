@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBENK OPS — Autenticação Institucional</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/military.css" />
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      overflow: hidden;
+      padding: 24px 16px;
+      position: relative;
+    }
+
+    /* ── MAPA TÁTICO VIVO EM MOVIMENTO AO FUNDO ── */
+    .login-map-stage {
+      position: fixed;
+      inset: -6%;
+      width: 112%;
+      height: 112%;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      transform: scale(1.03);
+      transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #login-bg-map {
+      width: 100%;
+      height: 100%;
+      background: var(--bg-deep);
+      opacity: 0.65;
+      transition: opacity 0.5s ease, filter 0.5s ease;
+    }
+
+    /* ── FILTROS CARTOGRÁFICOS SÓBRIOS, ESCUROS & MENOS EVIDENTES (Item 1) ── */
+    :root[data-theme="claro"] #login-bg-map .leaflet-tile-pane {
+      filter: grayscale(42%) sepia(16%) hue-rotate(185deg) brightness(0.90) contrast(1.10);
+    }
+    :root[data-theme="claro"] #login-bg-map {
+      opacity: 0.55;
+    }
+
+    :root[data-theme="escuro"] #login-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(185deg) saturate(175%) brightness(0.64) contrast(1.26);
+    }
+    :root[data-theme="escuro"] #login-bg-map {
+      opacity: 0.64;
+    }
+
+    :root[data-theme="noturno"] #login-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(195deg) saturate(135%) brightness(0.56) contrast(1.28);
+    }
+    :root[data-theme="noturno"] #login-bg-map {
+      opacity: 0.60;
+    }
+
+    :root[data-theme="cyber"] #login-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(218deg) saturate(260%) brightness(0.66) contrast(1.35);
+    }
+    :root[data-theme="cyber"] #login-bg-map {
+      opacity: 0.68;
+    }
+
+    #login-radar-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Vinheta mais escura para manter o visual sóbrio e focado (Item 1) */
+    .login-map-vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(
+        circle at center,
+        transparent 20%,
+        var(--bg-deep) 90%
+      );
+      opacity: 0.68;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(21,87,166,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(21,87,166,0.06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       SPINNER CONCÊNTRICO DUPLO SCI-FI (HORÁRIO / ANTI-HORÁRIO COM NEON)
+       ═══════════════════════════════════════════════════════════════════ */
+    :root, :root[data-theme="noturno"] {
+      --spinner-outer: #38bdf8;
+      --spinner-inner: #f59e0b;
+      --spinner-outer-glow: rgba(56, 189, 248, 0.7);
+      --spinner-inner-glow: rgba(245, 158, 11, 0.7);
+    }
+    :root[data-theme="escuro"] {
+      --spinner-outer: #00f0ff;
+      --spinner-inner: #ff9900;
+      --spinner-outer-glow: rgba(0, 240, 255, 0.85);
+      --spinner-inner-glow: rgba(255, 153, 0, 0.85);
+    }
+    :root[data-theme="claro"] {
+      --spinner-outer: #1557a6;
+      --spinner-inner: #d97706;
+      --spinner-outer-glow: rgba(21, 87, 166, 0.55);
+      --spinner-inner-glow: rgba(217, 119, 6, 0.55);
+    }
+    :root[data-theme="cyber"] {
+      --spinner-outer: #00e5ff;
+      --spinner-inner: #f43f5e;
+      --spinner-outer-glow: rgba(0, 229, 255, 0.85);
+      --spinner-inner-glow: rgba(244, 63, 94, 0.85);
+    }
+
+    /* O SPINNER EXPANDINDO E DIMINUINDO CONSTANTEMENTE (Item 4) */
+    .orbenk-scifi-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      overflow: visible;
+      filter: drop-shadow(0 0 12px var(--spinner-outer-glow));
+      animation: spinnerExpandContract 2.4s ease-in-out infinite;
+    }
+
+    .spinner-ring-outer {
+      transform-origin: 60px 60px;
+      animation: spinClockwise 3.2s linear infinite;
+    }
+    .spinner-ring-inner {
+      transform-origin: 60px 60px;
+      animation: spinCounterClockwise 2.1s linear infinite;
+    }
+    .spinner-pulse-core {
+      transform-origin: 60px 60px;
+      animation: spinnerCorePulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes spinClockwise {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes spinCounterClockwise {
+      0% { transform: rotate(360deg); }
+      100% { transform: rotate(0deg); }
+    }
+    @keyframes spinnerCorePulse {
+      0%, 100% { transform: scale(0.8); opacity: 0.35; }
+      50% { transform: scale(1.2); opacity: 0.85; }
+    }
+    @keyframes spinnerExpandContract {
+      0%, 100% {
+        transform: scale(0.86);
+        filter: drop-shadow(0 0 10px var(--spinner-outer-glow));
+      }
+      50% {
+        transform: scale(1.18);
+        filter: drop-shadow(0 0 28px var(--spinner-outer-glow)) drop-shadow(0 0 20px var(--spinner-inner-glow));
+      }
+    }
+
+    /* ── FROTA DE VTRS EM DESLOCAMENTO TÁTICO CONTÍNUO ── */
+    .tactical-vtr-marker {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: transform 0.12s linear;
+    }
+    .vtr-icon-badge {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(4, 8, 18, 0.9);
+      border: 2px solid var(--vtr-color, #00f0ff);
+      box-shadow: 0 0 14px var(--vtr-color, #00f0ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      position: relative;
+    }
+    .vtr-icon-badge::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 1.5px solid var(--vtr-color, #00f0ff);
+      opacity: 0.75;
+      animation: mapPulseRing 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+    .vtr-heading-arrow {
+      font-size: 10px;
+      color: var(--vtr-color, #00f0ff);
+      display: inline-block;
+      transition: transform 0.12s linear;
+    }
+    .vtr-callsign-pill {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: rgba(4, 8, 18, 0.92);
+      border: 1px solid var(--vtr-color, #00f0ff);
+      border-left: 3px solid var(--vtr-color, #00f0ff);
+      padding: 3px 8px;
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      letter-spacing: 0.06em;
+      line-height: 1.25;
+    }
+    .vtr-callsign-sub {
+      font-size: 7.5px;
+      opacity: 0.85;
+      display: block;
+      color: var(--vtr-color, #00f0ff);
+      letter-spacing: 0.1em;
+    }
+
+    /* Marcadores Táticos Pulsantes no Mapa de Fundo */
+    .tactical-map-node {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tactical-node-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan);
+      position: relative;
+    }
+    .tactical-node-dot::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent-cyan);
+      animation: mapPulseRing 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+    .tactical-node-dot.alert {
+      background: var(--accent-amber);
+      box-shadow: 0 0 12px var(--accent-amber);
+    }
+    .tactical-node-dot.alert::after {
+      border-color: var(--accent-amber);
+    }
+    .tactical-node-label {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text-primary);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      opacity: 0.9;
+    }
+    @keyframes mapPulseRing {
+      0% { transform: scale(0.6); opacity: 0.95; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+
+    /* HUD de Telemetria Geoespacial no Canto Superior Esquerdo */
+    .geo-telemetry-hud {
+      position: fixed;
+      top: 20px;
+      left: 24px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: color-mix(in srgb, var(--bg-panel) 65%, transparent);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-cyan);
+      border-radius: 6px;
+      padding: 8px 14px;
+      box-shadow: var(--shadow-panel);
+      backdrop-filter: blur(12px);
+      pointer-events: none;
+    }
+    .geo-hud-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+    }
+    .geo-hud-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 1.6s infinite;
+    }
+    .geo-hud-coords {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      letter-spacing: 0.08em;
+    }
+
+    .login-top-bar {
+      position: fixed;
+      top: 18px;
+      right: 24px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .corner-deco {
+      position: fixed;
+      width: 64px; height: 64px;
+      z-index: 3;
+      opacity: 0.28;
+      pointer-events: none;
+    }
+    .corner-deco.tl { top: 20px; left: 20px; border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); display: none; }
+    .corner-deco.bl { bottom: 20px; left: 20px; border-bottom: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
+    .corner-deco.br { bottom: 20px; right: 20px; border-bottom: 2px solid var(--accent-cyan); border-right: 2px solid var(--accent-cyan); }
+
+    /* ── QUADRO DE DADOS DE LOGIN MAIS TRANSPARENTE COM EFEITO VIDRO TÁTICO ── */
+    .login-card {
+      position: relative;
+      z-index: 10;
+      width: 440px;
+      max-width: 96vw;
+      background: color-mix(in srgb, var(--bg-panel) 22%, transparent);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 12px;
+      padding: 38px 36px 32px;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28), 0 0 24px var(--border-glow);
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 15%; right: 15%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    }
+
+    .logo-wrap {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .orbenk-logo {
+      width: 64px; height: 64px;
+      margin: 0 auto 10px;
+      display: block;
+    }
+
+    .logo-name {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      color: var(--accent-cyan);
+      font-family: var(--font-brand);
+      text-transform: none;
+    }
+
+    .logo-sub {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-primary);
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      margin-top: 5px;
+      font-weight: 700;
+    }
+
+    .restricted-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239,68,68,0.16);
+      border: 1px solid rgba(239,68,68,0.55);
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: var(--accent-red);
+      text-transform: uppercase;
+      margin: 12px auto 6px;
+    }
+
+    .login-form { margin-top: 20px; }
+
+    .login-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .login-input-wrap {
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .login-input {
+      width: 100%;
+      background: color-mix(in srgb, var(--bg-input) 56%, transparent);
+      backdrop-filter: blur(6px);
+      border: 1.5px solid var(--border);
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 12px 40px 12px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .login-input::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.85;
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    .login-input:focus {
+      border-color: var(--accent-cyan);
+      background: color-mix(in srgb, var(--bg-input) 75%, transparent);
+      box-shadow: 0 0 0 3px var(--border-glow);
+    }
+
+    .input-icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent-cyan);
+      font-size: 15px;
+      user-select: none;
+    }
+
+    .btn-auth {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue2));
+      border: 1px solid var(--accent-cyan);
+      color: #ffffff;
+      padding: 13px;
+      font-size: 12.5px;
+      font-weight: 800;
+      font-family: var(--font-brand);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 6px;
+      box-shadow: 0 4px 14px rgba(15, 43, 92, 0.28);
+    }
+
+    .btn-auth:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .btn-auth:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .login-error {
+      background: rgba(239,68,68,0.16);
+      border: 1px solid rgba(239,68,68,0.5);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-red);
+      margin-top: 14px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .login-error.visible { display: flex; }
+
+    .login-legal-note {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    .login-footer {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      margin-top: 18px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--bg-panel) 65%, transparent);
+      backdrop-filter: blur(6px);
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── TELA AUTOMÁTICA DE BOAS-VINDAS (EFEITO MATRIX SUAVE & TEMÁTICO) ── */
+    .welcome-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg-deep);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      clip-path: inset(0 0 0 100%);
+      transition:
+        clip-path 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.45s ease;
+    }
+
+    .welcome-screen.active {
+      pointer-events: all;
+      opacity: 1;
+      clip-path: inset(0 0 0 0%);
+    }
+
+    .welcome-screen.exiting {
+      clip-path: inset(0 100% 0 0);
+      opacity: 0;
+      transition:
+        clip-path 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.55s ease;
+    }
+
+    #matrix-welcome-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      opacity: 0.38;
+      pointer-events: none;
+    }
+
+    .welcome-vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: radial-gradient(
+        circle at center,
+        transparent 20%,
+        var(--bg-deep) 88%
+      );
+      pointer-events: none;
+    }
+
+    .welcome-content {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 32px 24px;
+      max-width: 92vw;
+    }
+
+    .welcome-emblem {
+      width: 58px;
+      height: 58px;
+      margin-bottom: 22px;
+      opacity: 0;
+      transform: translateY(10px) scale(0.94);
+      transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+      filter: drop-shadow(0 0 14px var(--border-glow));
+    }
+
+    .welcome-screen.active .welcome-emblem {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    /* Contêiner das letras Matrix se formando */
+    .matrix-title-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 16px;
+      perspective: 600px;
+    }
+
+    .matrix-char-col {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: clamp(20px, 3.6vw, 38px);
+      height: clamp(48px, 7vw, 72px);
+    }
+
+    .matrix-char-col.space {
+      min-width: clamp(14px, 2.2vw, 26px);
+    }
+
+    /* Rastro vertical suave de código que antecede a formação da letra */
+    .matrix-char-trail {
+      position: absolute;
+      bottom: 65%;
+      font-family: var(--font-mono);
+      font-size: clamp(10px, 1.3vw, 13px);
+      line-height: 1.15;
+      color: var(--accent-cyan);
+      opacity: 0;
+      transform: translateY(-18px);
+      transition: opacity 0.45s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+      user-select: none;
+      white-space: pre;
+      text-align: center;
+      filter: blur(0.3px);
+    }
+
+    .matrix-char-col.forming .matrix-char-trail {
+      opacity: 0.48;
+      transform: translateY(0);
+    }
+
+    .matrix-char-col.settled .matrix-char-trail {
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    /* Letra principal de "Seja bem-vindo" */
+    .matrix-char {
+      font-family: var(--font-brand);
+      font-size: clamp(26px, 4.8vw, 52px);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--accent-cyan);
+      opacity: 0;
+      transform: translateY(-14px) scale(0.92);
+      filter: blur(4px);
+      transition:
+        opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+        filter 0.55s ease,
+        color 0.45s ease,
+        text-shadow 0.55s ease;
+      will-change: transform, opacity, filter;
+    }
+
+    .matrix-char-col.forming .matrix-char {
+      opacity: 0.78;
+      transform: translateY(-3px) scale(0.98);
+      filter: blur(0.8px);
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+    }
+
+    .matrix-char-col.settled .matrix-char {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+      font-family: var(--font-brand);
+      color: var(--text-primary);
+      text-shadow:
+        0 0 18px var(--border-glow),
+        0 0 32px var(--border-glow);
+    }
+
+    :root[data-theme="claro"] .matrix-char-col.settled .matrix-char {
+      color: var(--accent-cyan);
+      text-shadow: 0 4px 18px rgba(15, 43, 92, 0.18);
+    }
+
+    .welcome-sub {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+      margin-top: 4px;
+    }
+
+    .welcome-sub.visible {
+      opacity: 0.9;
+      transform: translateY(0);
+    }
+
+    /* ── HUD SUPERIOR DA TELA DE BOAS-VINDAS ── */
+    .welcome-hud-topbar {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      right: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .welcome-hud-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hud-blink-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+      animation: pulse 1.4s infinite;
+    }
+    .hud-badge {
+      background: color-mix(in srgb, var(--accent-green) 18%, transparent);
+      border: 1px solid var(--accent-green);
+      color: var(--accent-green);
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .hud-sep {
+      opacity: 0.35;
+    }
+
+    /* ── CONTAINER DO SPINNER SCI-FI NO BOAS-VINDAS (Item 7) ── */
+    .welcome-spinner-wrap {
+      margin-bottom: 20px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: scale(0.85);
+      transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .welcome-screen.active .welcome-spinner-wrap {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ── CONSOLE DE CÁLCULO DE ROTAS SCI-FI & TELEMETRIA (Item 6) ── */
+    .welcome-routes-console {
+      width: 620px;
+      max-width: 90vw;
+      margin-top: 18px;
+      background: color-mix(in srgb, var(--bg-panel) 42%, transparent);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--accent-cyan);
+      border-radius: 8px;
+      padding: 14px 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 16px var(--border-glow);
+      backdrop-filter: blur(12px);
+      text-align: left;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.35s;
+    }
+    .welcome-screen.active .welcome-routes-console {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .routes-console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.12em;
+    }
+    .console-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .console-blip {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+      animation: pulse 1s infinite;
+    }
+    .console-coords {
+      color: var(--text-muted);
+    }
+    .routes-stream-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 640px) {
+      .routes-stream-grid { grid-template-columns: 1fr; }
+    }
+    .route-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 4px 8px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .route-badge {
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .route-badge.green { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+    .route-badge.cyan { background: rgba(0, 240, 255, 0.2); color: #00f0ff; border: 1px solid #00f0ff; }
+    .route-badge.amber { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+    .route-badge.purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7; }
+    .route-text {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .routes-calc-log {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent-green);
+      letter-spacing: 0.08em;
+    }
+    .log-cursor {
+      color: var(--accent-cyan);
+      font-weight: 800;
+      animation: blink 0.8s infinite;
+    }
+
+    .welcome-progress-track {
+      width: 260px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 999px;
+      margin-top: 24px;
+      overflow: hidden;
+      position: relative;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .welcome-progress-track.visible {
+      opacity: 1;
+    }
+
+    .welcome-progress-bar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+      box-shadow: 0 0 12px var(--accent-cyan);
+      transition: width 4.8s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Palco do Mapa Tático Vivo em Movimento Contínuo -->
+  <div class="login-map-stage" id="login-map-stage">
+    <div id="login-bg-map"></div>
+  </div>
+  <canvas id="login-radar-canvas"></canvas>
+  <div class="login-map-vignette"></div>
+  <div class="bg-grid"></div>
+
+  <!-- HUD de Telemetria Satelital em Tempo Real -->
+  <div class="geo-telemetry-hud">
+    <div class="geo-hud-title">
+      <span class="geo-hud-dot"></span>
+      <span id="geo-hud-sector">SAT-LINK ATIVO // JOINVILLE - SC</span>
+    </div>
+    <div class="geo-hud-coords" id="geo-hud-coords">
+      LAT -26.3044° S &nbsp;|&nbsp; LON -48.8464° W &nbsp;|&nbsp; 7 VTRs EM DESLOCAMENTO
+    </div>
+  </div>
+
+  <div class="corner-deco tl"></div>
+  <div class="corner-deco bl"></div>
+  <div class="corner-deco br"></div>
+
+  <!-- Tela Automática de Boas-Vindas com Informações Sci-Fi de Cálculos, Rotas & Spinner Duplo -->
+  <div class="welcome-screen" id="welcome-screen" aria-hidden="true">
+    <canvas id="matrix-welcome-canvas"></canvas>
+    <div class="welcome-vignette"></div>
+
+    <div class="welcome-content">
+      <!-- SPINNER SCI-FI CONCÊNTRICO DUPLO (Item 4: expande e diminui constantemente | Item 6: anéis aproximados) -->
+      <div class="welcome-spinner-wrap">
+        <svg class="orbenk-scifi-spinner" width="144" height="144" viewBox="0 0 120 120" fill="none">
+          <defs>
+            <filter id="welcomeSpinnerGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="3.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <!-- ANEL EXTERNO (r = 45, gira sentido Horário) -->
+          <g class="spinner-ring-outer">
+            <circle cx="60" cy="60" r="45" stroke="var(--spinner-outer)" stroke-width="2.5" stroke-opacity="0.22" fill="none"/>
+            <path d="M 60,15 A 45,45 0 0,1 100.8,41.0" stroke="var(--spinner-outer)" stroke-width="3.6" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="100.8,41.0 101.5,31.0 93.0,36.5" fill="var(--spinner-outer)" filter="url(#welcomeSpinnerGlow)"/>
+            <path d="M 96.9,85.8 A 45,45 0 0,1 21.0,82.5" stroke="var(--spinner-outer)" stroke-width="3.6" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="21.0,82.5 30.5,85.5 28.0,77.0" fill="var(--spinner-outer)" filter="url(#welcomeSpinnerGlow)"/>
+            <path d="M 17.7,44.6 A 45,45 0 0,1 55.0,15.3" stroke="var(--spinner-outer)" stroke-width="3.6" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="55.0,15.3 46.5,21.5 54.5,23.5" fill="var(--spinner-outer)" filter="url(#welcomeSpinnerGlow)"/>
+            <circle cx="92" cy="27" r="1.6" fill="var(--spinner-outer)" opacity="0.85"/>
+            <circle cx="28" cy="92" r="1.6" fill="var(--spinner-outer)" opacity="0.85"/>
+          </g>
+          <!-- ANEL INTERNO CONCÊNTRICO (r = 35.5, bem próximo do anel externo, gira sentido Anti-Horário) -->
+          <g class="spinner-ring-inner">
+            <circle cx="60" cy="60" r="35.5" stroke="var(--spinner-inner)" stroke-width="2" stroke-opacity="0.25" fill="none"/>
+            <path d="M 60,24.5 A 35.5,35.5 0 0,0 26,50" stroke="var(--spinner-inner)" stroke-width="3.2" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="26,50 28,40 36,44" fill="var(--spinner-inner)" filter="url(#welcomeSpinnerGlow)"/>
+            <path d="M 30,83 A 35.5,35.5 0 0,0 85,85" stroke="var(--spinner-inner)" stroke-width="3.2" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="85,85 77,88 80,80" fill="var(--spinner-inner)" filter="url(#welcomeSpinnerGlow)"/>
+            <path d="M 94.5,50 A 35.5,35.5 0 0,0 70.5,25" stroke="var(--spinner-inner)" stroke-width="3.2" stroke-linecap="round" fill="none" filter="url(#welcomeSpinnerGlow)"/>
+            <polygon points="70.5,25 75.5,34 67.5,32" fill="var(--spinner-inner)" filter="url(#welcomeSpinnerGlow)"/>
+            <circle cx="75" cy="42" r="1.4" fill="var(--spinner-inner)" opacity="0.9"/>
+          </g>
+          <!-- Núcleo central pulsante sutil -->
+          <circle cx="60" cy="60" r="8" fill="var(--spinner-outer)" opacity="0.3" class="spinner-pulse-core"/>
+          <circle cx="60" cy="60" r="3.5" fill="var(--spinner-inner)"/>
+        </svg>
+      </div>
+
+      <!-- APENAS O BEM-VINDO E O SPINNER (Item 3) -->
+      <div class="matrix-title-wrap" id="matrix-title-wrap" aria-label="Seja bem-vindo"></div>
+    </div>
+  </div>
+
+  <!-- Seletor de Temas na Tela de Autenticação -->
+  <div class="login-top-bar">
+    <div class="theme-switcher-pill" role="radiogroup" aria-label="Seletor de Tema Visual">
+      <button type="button" class="theme-btn" data-theme="claro" onclick="window.switchTheme('claro')" title="Tema Claro (Formal e Institucional)">
+        <span class="theme-icon">☀️</span>
+        <span class="theme-label">CLARO</span>
+      </button>
+      <button type="button" class="theme-btn" data-theme="escuro" onclick="window.switchTheme('escuro')" title="Tema Escuro (Cyberpunk Institucional)">
+        <span class="theme-icon">⚡</span>
+        <span class="theme-label">ESCURO</span>
+      </button>
+      <button type="button" class="theme-btn" data-theme="noturno" onclick="window.switchTheme('noturno')" title="Tema Noturno (Austero e Estimulante)">
+        <span class="theme-icon">🌙</span>
+        <span class="theme-label">NOTURNO</span>
+      </button>
+      <button type="button" class="theme-btn" data-theme="cyber" onclick="window.switchTheme('cyber')" title="Tema Cyber (Neon Azul Elétrico e Roxo)">
+        <span class="theme-icon">🔮</span>
+        <span class="theme-label">CYBER</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Card de Autenticação Institucional -->
+  <div class="login-card">
+    <div class="logo-wrap">
+      <svg class="orbenk-logo" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="36,4 68,20 68,52 36,68 4,52 4,20" fill="none" stroke="#1557a6" stroke-width="2.2"/>
+        <polygon points="36,12 60,24 60,48 36,60 12,48 12,24" fill="none" stroke="currentColor" style="color:var(--accent-cyan)" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="36" cy="36" r="10" fill="none" stroke="currentColor" style="color:var(--accent-cyan)" stroke-width="1.5" opacity="0.6"/>
+        <circle cx="36" cy="36" r="4" fill="currentColor" style="color:var(--accent-cyan)"/>
+      </svg>
+      <div class="logo-name">Orbenk</div>
+      <div class="logo-sub">Central Integrada de Ocorrências &amp; Pós-Trauma</div>
+      <div class="restricted-badge">🔒 AUTENTICAÇÃO OBRIGATÓRIA DE OPERADOR</div>
+    </div>
+
+    <form class="login-form" id="login-form" autocomplete="off">
+      <div class="login-input-wrap">
+        <label class="login-label" for="username">Identificação do Operador (Usuário)</label>
+        <input
+          class="login-input"
+          type="text"
+          id="username"
+          name="username"
+          placeholder="Digite seu usuário funcional"
+          autocomplete="off"
+          required
+          autofocus
+        />
+        <span class="input-icon">◉</span>
+      </div>
+
+      <div class="login-input-wrap">
+        <label class="login-label" for="password">Credencial de Segurança (Senha)</label>
+        <input
+          class="login-input"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="••••••••••"
+          autocomplete="new-password"
+          required
+        />
+        <span class="input-icon" id="toggle-pass" style="cursor:pointer;" title="Mostrar/Ocultar senha">👁</span>
+      </div>
+
+      <button class="btn-auth" type="submit" id="auth-btn">
+        <span id="auth-btn-text">ACESSAR SISTEMA OPERACIONAL</span>
+      </button>
+
+      <div class="login-error" id="login-error">
+        <span>⚠</span>
+        <span id="error-msg">Credenciais inválidas</span>
+      </div>
+    </form>
+
+    <div class="login-legal-note">
+      Acesso monitorado e auditado sob a Lei Federal nº 7.102/1983.<br/>
+      Toda operação registrada possui rastreabilidade e fé pública funcional.
+    </div>
+  </div>
+
+  <div class="login-footer">
+    <div>ORBENK SEGURANÇA PRIVADA LTDA. — SISTEMA DE GESTÃO DE INCIDENTES E LAUDOS PERICIAIS</div>
+  </div>
+
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const b = document.createElement('div');
+        b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999999;background:linear-gradient(90deg,#b91c1c,#ef4444);color:#ffffff;padding:14px 20px;text-align:center;font-weight:800;font-size:12.5px;letter-spacing:0.5px;box-shadow:0 4px 20px rgba(0,0,0,0.8);font-family:sans-serif;display:flex;align-items:center;justify-content:center;gap:12px;';
+        b.innerHTML = '⚠️ <span>ATENÇÃO: Para rodar o sistema com 1 clique sem bloqueios de segurança do navegador, execute o arquivo <strong>CLIQUE_AQUI_PARA_INICIAR.bat</strong> localizado na pasta principal!</span>';
+        document.body.prepend(b);
+      });
+    }
+  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    import { auth, clearTokens, initTheme } from './assets/js/api.js';
+
+    // Exige login obrigatório sempre que a tela inicial do sistema é aberta
+    clearTokens();
+    initTheme();
+
+    // ── Inicializa Mapa Tático Vivo, Frota de 7 VTRs & Radar HUD em Movimento ──
+    function initLivingBackgroundMap() {
+      const sectorEl = document.getElementById('geo-hud-sector');
+      const coordsEl = document.getElementById('geo-hud-coords');
+      const stageEl  = document.getElementById('login-map-stage');
+
+      // Zonas operacionais estratégicas de Joinville - SC
+      const tacticalZones = [
+        { name: 'CENTRAL ORBENK // CENTRO CÍVICO', lat: -26.3044, lon: -48.8464, alert: false },
+        { name: 'DISTRITO INDUSTRIAL NORTE // PERINI', lat: -26.2425, lon: -48.8802, alert: true },
+        { name: 'SETOR AMÉRICA // POLO CORPORATIVO', lat: -26.2865, lon: -48.8548, alert: false },
+        { name: 'CORREDOR LOGÍSTICO BR-101 SUL', lat: -26.3410, lon: -48.8590, alert: true },
+        { name: 'SETOR BUCAREIN // UNIDADE BANCÁRIA', lat: -26.3168, lon: -48.8362, alert: false },
+        { name: 'ZONA LESTE // BOA VISTA & COMASA', lat: -26.2920, lon: -48.8140, alert: false },
+      ];
+
+      // ── FROTA DE 7 VTRs ATIVAS EM DESLOCAMENTO TÁTICO CONTÍNUO (Item 2) ──
+      const tacticalFleet = [
+        {
+          id: 'vtr-01',
+          name: 'VTR-01 [COMANDO]',
+          color: '#00f0ff',
+          role: 'COORDENAÇÃO',
+          baseSpeed: 52,
+          stepSpeed: 0.015,
+          route: [
+            [-26.3044, -48.8464], // Centro
+            [-26.2950, -48.8490],
+            [-26.2865, -48.8548], // América
+            [-26.2810, -48.8390], // Saguaçu
+            [-26.3044, -48.8464]
+          ],
+          idx: 0,
+          t: 0
+        },
+        {
+          id: 'vtr-03',
+          name: 'VTR-03 [INTERVENÇÃO]',
+          color: '#10b981',
+          role: 'PRONTA RESPOSTA',
+          baseSpeed: 58,
+          stepSpeed: 0.018,
+          route: [
+            [-26.3168, -48.8362], // Bucarein
+            [-26.3320, -48.8350], // Itaum
+            [-26.3410, -48.8590], // BR-101 Sul
+            [-26.3280, -48.8480],
+            [-26.3168, -48.8362]
+          ],
+          idx: 0,
+          t: 0.35
+        },
+        {
+          id: 'vtr-04',
+          name: 'VTR-04 [SLA ORBENK]',
+          color: '#00ffcc',
+          role: 'GRUPO TÁTICO',
+          baseSpeed: 64,
+          stepSpeed: 0.020,
+          route: [
+            [-26.2425, -48.8802], // Perini Norte
+            [-26.2550, -48.8720],
+            [-26.2750, -48.8680], // Costa e Silva
+            [-26.2610, -48.8850],
+            [-26.2425, -48.8802]
+          ],
+          idx: 0,
+          t: 0.65
+        },
+        {
+          id: 'vtr-07',
+          name: 'VTR-07 [RONDA]',
+          color: '#ff9900',
+          role: 'PERÍMETRO AMÉRICA',
+          baseSpeed: 44,
+          stepSpeed: 0.016,
+          route: [
+            [-26.2865, -48.8548], // América
+            [-26.2820, -48.8860], // Glória
+            [-26.2750, -48.8680], // Costa e Silva
+            [-26.2950, -48.8490],
+            [-26.2865, -48.8548]
+          ],
+          idx: 0,
+          t: 0.82
+        },
+        {
+          id: 'vtr-09',
+          name: 'VTR-09 [APOIO]',
+          color: '#38bdf8',
+          role: 'SETOR LESTE',
+          baseSpeed: 49,
+          stepSpeed: 0.017,
+          route: [
+            [-26.2920, -48.8140], // Boa Vista
+            [-26.2810, -48.8390], // Saguaçu
+            [-26.3044, -48.8464], // Centro
+            [-26.3020, -48.8240],
+            [-26.2920, -48.8140]
+          ],
+          idx: 0,
+          t: 0.18
+        },
+        {
+          id: 'vtr-12',
+          name: 'VTR-12 [TÁTICO ESPECIAL]',
+          color: '#c084fc',
+          role: 'CONFRONTO / RESGATE',
+          baseSpeed: 66,
+          stepSpeed: 0.022,
+          route: [
+            [-26.2425, -48.8802], // Perini
+            [-26.2820, -48.8860], // Glória
+            [-26.3044, -48.8464], // Centro
+            [-26.2750, -48.8680], // Costa e Silva
+            [-26.2425, -48.8802]
+          ],
+          idx: 0,
+          t: 0.52
+        },
+        {
+          id: 'moto-02',
+          name: 'MOTO-02 [ESCOTA EXPRESS]',
+          color: '#fbbf24',
+          role: 'BATEDOR RÁPIDO',
+          baseSpeed: 72,
+          stepSpeed: 0.024,
+          route: [
+            [-26.3044, -48.8464], // Centro
+            [-26.3168, -48.8362], // Bucarein
+            [-26.2920, -48.8140], // Boa Vista
+            [-26.3044, -48.8464]
+          ],
+          idx: 0,
+          t: 0.44
+        }
+      ];
+
+      let bgMap = null;
+
+      if (window.L) {
+        bgMap = L.map('login-bg-map', {
+          center: [tacticalZones[0].lat, tacticalZones[0].lon],
+          zoom: 12.3,
+          zoomControl: false,
+          attributionControl: false,
+          dragging: false,
+          scrollWheelZoom: false,
+          doubleClickZoom: false,
+          boxZoom: false,
+          keyboard: false,
+          zoomSnap: 0.1,
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+        }).addTo(bgMap);
+
+        // Plota os postos monitorados e conexões com a Central
+        const hubCoord = [tacticalZones[0].lat, tacticalZones[0].lon];
+        tacticalZones.forEach((zone, idx) => {
+          const icon = L.divIcon({
+            className: '',
+            html: `
+              <div class="tactical-map-node">
+                <div class="tactical-node-dot ${zone.alert ? 'alert' : ''}"></div>
+                <div class="tactical-node-label">${zone.name.split('//')[0].trim()}</div>
+              </div>`,
+            iconAnchor: [5, 5],
+          });
+          L.marker([zone.lat, zone.lon], { icon }).addTo(bgMap);
+
+          if (idx > 0) {
+            L.polyline([hubCoord, [zone.lat, zone.lon]], {
+              color: zone.alert ? '#f59e0b' : '#00d8ff',
+              weight: 1.5,
+              opacity: 0.45,
+              dashArray: '6, 8',
+            }).addTo(bgMap);
+          }
+
+          L.circle([zone.lat, zone.lon], {
+            radius: zone.alert ? 420 : 280,
+            color: zone.alert ? '#f59e0b' : '#00d8ff',
+            weight: 1,
+            fillOpacity: 0.06,
+          }).addTo(bgMap);
+        });
+
+        // Inicializa cada VTR com seu marcador estilizado e rastro de rota
+        tacticalFleet.forEach(vtr => {
+          const startPt = vtr.route[0];
+          const icon = L.divIcon({
+            className: '',
+            html: `
+              <div class="tactical-vtr-marker" id="marker-${vtr.id}" style="--vtr-color:${vtr.color};">
+                <div class="vtr-icon-badge">
+                  <span class="vtr-heading-arrow" id="arrow-${vtr.id}">▲</span>
+                </div>
+                <div class="vtr-callsign-pill">
+                  <div>⚡ ${vtr.name}</div>
+                  <span class="vtr-callsign-sub" id="speed-${vtr.id}">${vtr.baseSpeed} KM/H // ${vtr.role}</span>
+                </div>
+              </div>`,
+            iconAnchor: [13, 13],
+          });
+
+          vtr.marker = L.marker(startPt, { icon }).addTo(bgMap);
+
+          // Rastro tático luminoso contínuo da VTR
+          vtr.trail = L.polyline([], {
+            color: vtr.color,
+            weight: 2.2,
+            opacity: 0.42,
+            dashArray: '4, 8'
+          }).addTo(bgMap);
+          vtr.trailPoints = [];
+        });
+      }
+
+      // Loop de animação de alta precisão para deslocamento suave de toda a frota
+      let currentZoneIdx = 0;
+      let angle = 0;
+
+      setInterval(() => {
+        if (!bgMap) return;
+        angle += 0.018;
+
+        // Deriva suave contínua da câmera orbital
+        const dx = Math.cos(angle) * 0.65;
+        const dy = Math.sin(angle * 0.8) * 0.55;
+        bgMap.panBy([dx, dy], { animate: false });
+
+        // Atualiza a posição de cada VTR ao longo dos waypoints
+        tacticalFleet.forEach(vtr => {
+          if (!vtr.marker) return;
+
+          vtr.t += vtr.stepSpeed;
+          if (vtr.t >= 1) {
+            vtr.t = 0;
+            vtr.idx = (vtr.idx + 1) % (vtr.route.length - 1);
+          }
+
+          const p1 = vtr.route[vtr.idx];
+          const p2 = vtr.route[vtr.idx + 1] || vtr.route[0];
+
+          const curLat = p1[0] + (p2[0] - p1[0]) * vtr.t;
+          const curLon = p1[1] + (p2[1] - p1[1]) * vtr.t;
+
+          vtr.marker.setLatLng([curLat, curLon]);
+
+          // Atualiza rastro de navegação
+          vtr.trailPoints.push([curLat, curLon]);
+          if (vtr.trailPoints.length > 7) vtr.trailPoints.shift();
+          vtr.trail.setLatLngs(vtr.trailPoints);
+
+          // Rotação da seta na direção do deslocamento
+          const angleDeg = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * (180 / Math.PI) - 90;
+          const arrowEl = document.getElementById(`arrow-${vtr.id}`);
+          if (arrowEl) {
+            arrowEl.style.transform = `rotate(${angleDeg.toFixed(0)}deg)`;
+          }
+
+          // Flutuação realista de velocímetro
+          if (Math.random() < 0.04) {
+            const spdEl = document.getElementById(`speed-${vtr.id}`);
+            if (spdEl) {
+              const liveSpd = vtr.baseSpeed + Math.floor((Math.random() - 0.5) * 8);
+              spdEl.textContent = `${liveSpd} KM/H // ${vtr.role}`;
+            }
+          }
+        });
+
+        const c = bgMap.getCenter();
+        if (coordsEl) {
+          coordsEl.innerHTML = `LAT ${c.lat.toFixed(4)}° S &nbsp;|&nbsp; LON ${c.lng.toFixed(4)}° W &nbsp;|&nbsp; 7 VTRS ATIVAS`;
+        }
+      }, 40);
+
+      // A cada 7.5 segundos, desliza suavemente para outro setor estratégico
+      setInterval(() => {
+        currentZoneIdx = (currentZoneIdx + 1) % tacticalZones.length;
+        const nextZone = tacticalZones[currentZoneIdx];
+        if (sectorEl) {
+          sectorEl.textContent = `SAT-LINK // ${nextZone.name}`;
+        }
+        if (bgMap) {
+          bgMap.panTo([nextZone.lat, nextZone.lon], {
+            animate: true,
+            duration: 5.5,
+            easeLinearity: 0.15,
+          });
+        }
+      }, 7500);
+
+      // Leve paralaxe ao mover o mouse na tela de login
+      window.addEventListener('mousemove', (e) => {
+        if (!stageEl) return;
+        const nx = (e.clientX / window.innerWidth - 0.5) * -14;
+        const ny = (e.clientY / window.innerHeight - 0.5) * -14;
+        stageEl.style.transform = `scale(1.04) translate(${nx}px, ${ny}px)`;
+      });
+
+      // Radar tático giratório sobre o mapa
+      const radarCanvas = document.getElementById('login-radar-canvas');
+      if (radarCanvas) {
+        const rCtx = radarCanvas.getContext('2d');
+        const resizeRadar = () => {
+          radarCanvas.width = window.innerWidth;
+          radarCanvas.height = window.innerHeight;
+        };
+        resizeRadar();
+        window.addEventListener('resize', resizeRadar);
+
+        let sweepAngle = 0;
+        function drawRadarOverlay() {
+          rCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
+          const cx = radarCanvas.width / 2;
+          const cy = radarCanvas.height / 2;
+          const maxR = Math.min(radarCanvas.width, radarCanvas.height) * 0.44;
+
+          const theme = document.documentElement.getAttribute('data-theme') || 'claro';
+          const strokeColor = theme === 'cyber'
+            ? 'rgba(168, 85, 247, 0.22)'
+            : theme === 'noturno'
+              ? 'rgba(245, 158, 11, 0.20)'
+              : theme === 'escuro'
+                ? 'rgba(0, 229, 255, 0.22)'
+                : 'rgba(15, 43, 92, 0.16)';
+
+          // Anéis concêntricos de varredura
+          [0.55, 0.82, 1.08].forEach(mult => {
+            rCtx.beginPath();
+            rCtx.arc(cx, cy, maxR * mult, 0, Math.PI * 2);
+            rCtx.strokeStyle = strokeColor;
+            rCtx.lineWidth = 1;
+            rCtx.stroke();
+          });
+
+          sweepAngle += 0.009;
+          const grad = rCtx.createConicGradient(sweepAngle, cx, cy);
+          grad.addColorStop(0, strokeColor);
+          grad.addColorStop(0.14, 'transparent');
+          grad.addColorStop(1, 'transparent');
+
+          rCtx.beginPath();
+          rCtx.arc(cx, cy, maxR * 1.08, 0, Math.PI * 2);
+          rCtx.fillStyle = grad;
+          rCtx.fill();
+
+          requestAnimationFrame(drawRadarOverlay);
+        }
+        requestAnimationFrame(drawRadarOverlay);
+      }
+    }
+
+    initLivingBackgroundMap();
+
+    const form       = document.getElementById('login-form');
+    const authBtn    = document.getElementById('auth-btn');
+    const btnText    = document.getElementById('auth-btn-text');
+    const errorDiv   = document.getElementById('login-error');
+    const errorMsg   = document.getElementById('error-msg');
+    const togglePass = document.getElementById('toggle-pass');
+    const passInput  = document.getElementById('password');
+
+    togglePass.addEventListener('click', () => {
+      if (passInput.type === 'password') {
+        passInput.type = 'text';
+        togglePass.textContent = '🔒';
+      } else {
+        passInput.type = 'password';
+        togglePass.textContent = '👁';
+      }
+    });
+
+    // ── SPINNER DUPLO CONCÊNTRICO SCI-FI NO BOTÃO DE CARREGAMENTO (Item 3, 5 & 6) ──
+    function setLoading(loading) {
+      authBtn.disabled = loading;
+      btnText.innerHTML = loading
+        ? `<div style="display:inline-flex;align-items:center;justify-content:center;gap:12px;">
+             <svg class="orbenk-scifi-spinner" width="24" height="24" viewBox="0 0 120 120" fill="none">
+               <g class="spinner-ring-outer">
+                 <circle cx="60" cy="60" r="45" stroke="var(--spinner-outer)" stroke-width="5" stroke-dasharray="68 26" stroke-linecap="round" fill="none"/>
+                 <polygon points="100.8,41 102,30 93,36" fill="var(--spinner-outer)"/>
+               </g>
+               <g class="spinner-ring-inner">
+                 <circle cx="60" cy="60" r="35.5" stroke="var(--spinner-inner)" stroke-width="4.5" stroke-dasharray="52 20" stroke-linecap="round" fill="none"/>
+                 <polygon points="26,50 28,40 36,44" fill="var(--spinner-inner)"/>
+               </g>
+               <circle cx="60" cy="60" r="6" fill="var(--spinner-inner)"/>
+             </svg>
+             <span>AUTENTICANDO OPERADOR...</span>
+           </div>`
+        : 'ACESSAR SISTEMA OPERACIONAL';
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorDiv.classList.add('visible');
+      const card = document.querySelector('.login-card');
+      card.style.transform = 'translateX(-6px)';
+      setTimeout(() => { card.style.transform = 'translateX(6px)'; }, 80);
+      setTimeout(() => { card.style.transform = 'translateX(-4px)'; }, 160);
+      setTimeout(() => { card.style.transform = 'translateX(0)'; card.style.transition = 'transform 0.15s ease'; }, 240);
+    }
+
+    function hideError() {
+      errorDiv.classList.remove('visible');
+    }
+
+    // ── Animação Suave Matrix "SEJA BEM-VINDO" & Spinner (Itens 3, 4, 5 & 6) ──
+    function playMatrixWelcome(operatorName) {
+      const screen = document.getElementById('welcome-screen');
+      const titleWrap = document.getElementById('matrix-title-wrap');
+      const canvas = document.getElementById('matrix-welcome-canvas');
+
+      const theme = document.documentElement.getAttribute('data-theme') || 'claro';
+      const palettes = {
+        claro:   { rain: ['#0f2b5c', '#1d4ed8', '#3b82f6'], bgFade: 'rgba(240, 244, 249, 0.18)' },
+        escuro:  { rain: ['#00e5ff', '#0ea5e9', '#10b981'], bgFade: 'rgba(4, 8, 17, 0.18)' },
+        noturno: { rain: ['#f59e0b', '#fbbf24', '#38bdf8'], bgFade: 'rgba(7, 13, 25, 0.18)' },
+        cyber:   { rain: ['#00d8ff', '#a855f7', '#6366f1', '#d946ef'], bgFade: 'rgba(4, 5, 16, 0.18)' },
+      };
+      const pal = palettes[theme] || palettes.claro;
+
+      // 1. Chuva Matrix suave no canvas de fundo
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const fontSize = 15;
+      const columns = Math.floor(canvas.width / (fontSize * 1.6));
+      const drops = Array.from({ length: columns }, () => Math.random() * -30);
+      const glyphs = '01ORBENK∑∆◊◈ABCDEF7102';
+
+      let animFrameId;
+      let lastDraw = 0;
+      function renderGentleRain(ts) {
+        if (ts - lastDraw > 76) {
+          lastDraw = ts;
+          ctx.fillStyle = pal.bgFade;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
+
+          for (let i = 0; i < drops.length; i++) {
+            const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+            ctx.fillStyle = pal.rain[i % pal.rain.length];
+            const x = i * fontSize * 1.6;
+            const y = drops[i] * fontSize;
+            ctx.fillText(ch, x, y);
+
+            if (y > canvas.height && Math.random() > 0.975) {
+              drops[i] = -2;
+            }
+            drops[i] += 0.34;
+          }
+        }
+        animFrameId = requestAnimationFrame(renderGentleRain);
+      }
+      animFrameId = requestAnimationFrame(renderGentleRain);
+
+      // 2. Constrói colunas de caracteres de "SEJA BEM-VINDO" (Apenas o bem-vindo e o spinner)
+      const targetText = 'SEJA BEM-VINDO';
+      const matrixPool = '0123456789ABCDEF◊◈∑∆';
+      titleWrap.innerHTML = '';
+
+      const charEntries = [];
+      for (let i = 0; i < targetText.length; i++) {
+        const ch = targetText[i];
+        const col = document.createElement('div');
+        col.className = 'matrix-char-col' + (ch === ' ' ? ' space' : '');
+
+        if (ch !== ' ') {
+          const trail = document.createElement('div');
+          trail.className = 'matrix-char-trail';
+          trail.textContent = `${matrixPool[i % matrixPool.length]}\n${matrixPool[(i + 3) % matrixPool.length]}`;
+
+          const charSpan = document.createElement('span');
+          charSpan.className = 'matrix-char';
+          charSpan.textContent = matrixPool[(i * 2) % matrixPool.length];
+
+          col.appendChild(trail);
+          col.appendChild(charSpan);
+          charEntries.push({ col, trail, charSpan, target: ch, index: i });
+        }
+
+        titleWrap.appendChild(col);
+      }
+
+      // 3. Ativa a tela de boas-vindas
+      screen.classList.add('active');
+
+      // 4. Formação cadenciada das letras
+      charEntries.forEach((entry, idx) => {
+        const startDelay = 220 + idx * 110;
+
+        setTimeout(() => {
+          entry.col.classList.add('forming');
+          let step = 0;
+          const maxSteps = 5;
+
+          const morphInterval = setInterval(() => {
+            step++;
+            if (step < maxSteps) {
+              const randChar = matrixPool[Math.floor(Math.random() * matrixPool.length)];
+              const randTrail1 = matrixPool[Math.floor(Math.random() * matrixPool.length)];
+              const randTrail2 = matrixPool[Math.floor(Math.random() * matrixPool.length)];
+              entry.charSpan.textContent = randChar;
+              entry.trail.textContent = `${randTrail1}\n${randTrail2}`;
+            } else {
+              clearInterval(morphInterval);
+              entry.charSpan.textContent = entry.target;
+              entry.col.classList.remove('forming');
+              entry.col.classList.add('settled');
+            }
+          }, 95);
+        }, startDelay);
+      });
+
+      // 5. Redirecionamento após exatamente 5 segundos (5000ms - Item 5)
+      setTimeout(() => {
+        cancelAnimationFrame(animFrameId);
+        window.location.href = 'dashboard.html';
+      }, 5000);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        showError('Informe o usuário e a senha de acesso.');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await auth.login(username, password);
+        playMatrixWelcome(username);
+      } catch (err) {
+        setLoading(false);
+        showError(err.message || 'Usuário ou senha incorretos.');
+      }
+    });
+  </script>
+</body>
+</html>

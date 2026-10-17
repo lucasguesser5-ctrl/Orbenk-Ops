@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBENK OPS — Painel Operacional de Ocorrências</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/military.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <!-- Chart.js & Leaflet para inteligência gráfica e geoespacial -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    /* ── MAPA TÁTICO EM MOVIMENTO AO FUNDO DO DASHBOARD ── */
+    .dashboard-map-stage {
+      position: fixed;
+      inset: -4%;
+      width: 108%;
+      height: 108%;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #dashboard-bg-map {
+      width: 100%;
+      height: 100%;
+      background: var(--bg-deep);
+      opacity: 0.42;
+      transition: opacity 0.5s ease, filter 0.5s ease;
+    }
+    :root[data-theme="claro"] #dashboard-bg-map .leaflet-tile-pane {
+      filter: grayscale(80%) sepia(28%) hue-rotate(185deg) brightness(0.96) contrast(1.1);
+    }
+    :root[data-theme="claro"] #dashboard-bg-map { opacity: 0.36; }
+
+    :root[data-theme="escuro"] #dashboard-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(185deg) saturate(190%) brightness(0.66) contrast(1.28);
+    }
+    :root[data-theme="escuro"] #dashboard-bg-map { opacity: 0.46; }
+
+    :root[data-theme="noturno"] #dashboard-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(195deg) saturate(135%) brightness(0.54) contrast(1.32);
+    }
+    :root[data-theme="noturno"] #dashboard-bg-map { opacity: 0.42; }
+
+    :root[data-theme="cyber"] #dashboard-bg-map .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(218deg) saturate(290%) brightness(0.65) contrast(1.38);
+    }
+    :root[data-theme="cyber"] #dashboard-bg-map { opacity: 0.52; }
+
+    .dashboard-map-vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 55% 45%, transparent 15%, var(--bg-deep) 92%);
+      opacity: 0.78;
+    }
+
+    .main-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Painéis e Cards translúcidos para revelar o mapa em movimento ao fundo */
+    .stat-card,
+    .panel {
+      background: color-mix(in srgb, var(--bg-panel) 76%, transparent) !important;
+      backdrop-filter: blur(10px) saturate(140%);
+      -webkit-backdrop-filter: blur(10px) saturate(140%);
+    }
+
+    /* Marcadores táticos no mapa de fundo do Dashboard */
+    .dash-map-node {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dash-node-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan);
+      position: relative;
+    }
+    .dash-node-dot::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent-cyan);
+      animation: dashMapPulse 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+    .dash-node-dot.alert {
+      background: var(--accent-red);
+      box-shadow: 0 0 12px var(--accent-red);
+    }
+    .dash-node-dot.alert::after { border-color: var(--accent-red); }
+    .dash-node-label {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 800;
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    @keyframes dashMapPulse {
+      0% { transform: scale(0.6); opacity: 0.95; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="tactical-bg scanlines">
+  <!-- Mapa Tático em Movimento Contínuo no Fundo do Dashboard -->
+  <div class="dashboard-map-stage" id="dashboard-map-stage">
+    <div id="dashboard-bg-map"></div>
+  </div>
+  <div class="dashboard-map-vignette"></div>
+
+  <div class="app-layout">
+    <!-- Sidebar Slot -->
+    <div id="sidebar-slot"></div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Topbar Slot -->
+      <div id="topbar-slot"></div>
+
+      <main class="page-content">
+        <div class="dashboard-central-container">
+          
+          <!-- Banner / Cabeçalho Principal Centralizado -->
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div class="label-military" style="letter-spacing:2px; font-weight:800; display:flex; align-items:center; gap:8px;">
+                <span class="status-dot green"></span>
+                <span id="dash-geo-telemetry">SAT-LINK ATIVO // VARREDURA GEOESPACIAL JOINVILLE-SC</span>
+              </div>
+              <h1 class="text-2xl font-mono text-cyan glow-cyan" style="margin-top:4px; font-weight:800; letter-spacing:0.5px;">
+                PAINEL OPERACIONAL DE OCORRÊNCIAS &amp; PÓS-TRAUMA
+              </h1>
+              <div class="text-xs text-secondary" style="margin-top:2px;">
+                Mapeamento tático em tempo real, auditoria de SLA, indicadores de pós-trauma e emissão de laudos periciais
+              </div>
+            </div>
+            
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" id="btn-export-csv" title="Exportar planilha CSV das ocorrências filtradas">
+                ⬇ EXPORTAR CSV
+              </button>
+              <button class="btn btn-ghost btn-sm" id="btn-refresh" title="Recarregar Dados e Sincronizar">
+                ↻ ATUALIZAR
+              </button>
+              <a href="form.html" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
+                <span>＋</span> REGISTRAR OCORRÊNCIA
+              </a>
+            </div>
+          </div>
+
+          <!-- LINHA 1: INDICADORES ESTRATÉGICOS CONSOLIDADOS (100% EXTRAÍDOS DA BASE REAL) -->
+          <div class="grid-4 mb-4" id="stats-row">
+            <!-- Card 1: Total -->
+            <div class="stat-card" style="--card-accent: var(--accent-cyan);">
+              <div class="stat-icon text-cyan">⬢</div>
+              <div class="stat-label">Total de Ocorrências</div>
+              <div class="stat-value text-cyan" id="stat-total">0</div>
+              <div class="stat-sub" id="stat-total-sub">Carregando base...</div>
+            </div>
+
+            <!-- Card 2: Em Andamento -->
+            <div class="stat-card" style="--card-accent: var(--accent-red);">
+              <div class="stat-icon text-red">▲</div>
+              <div class="stat-label">Em Andamento</div>
+              <div class="stat-value text-red" id="stat-active">0</div>
+              <div class="stat-sub" id="stat-active-sub"><span class="status-dot red"></span> Aguardando resolução tática</div>
+            </div>
+
+            <!-- Card 3: SLA Cumprido -->
+            <div class="stat-card" style="--card-accent: var(--accent-green);">
+              <div class="stat-icon text-green">◈</div>
+              <div class="stat-label">SLA Cumprido (≤ 12 min)</div>
+              <div class="stat-value text-green" id="stat-sla">—</div>
+              <div class="stat-sub">Média real: <strong class="text-cyan" id="stat-sla-avg">—</strong></div>
+            </div>
+
+            <!-- Card 4: Pós-Trauma, Preservação Pericial & Lei 7.102 -->
+            <div class="stat-card" style="--card-accent: var(--accent-amber);">
+              <div class="stat-icon text-amber">🛡</div>
+              <div class="stat-label">Preservação Pericial &amp; Pós-Trauma</div>
+              <div class="stat-value text-green" id="stat-life">—</div>
+              <div class="stat-sub" id="stat-life-sub">Auditoria Lei 7.102/83 &amp; Art. 6º CPP</div>
+            </div>
+          </div>
+
+          <!-- LINHA 2: MATRIZ DE INTELIGÊNCIA GRÁFICA (4 GRÁFICOS INTELIGENTES INTERATIVOS) -->
+          <div class="grid-2 mb-4" id="charts-row">
+            
+            <!-- Gráfico 1: Evolução Temporal & Tendência Mensal (Linha/Área) -->
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="panel-title">Evolução Temporal de Ocorrências (12 Meses)</span>
+                  <div class="text-xs text-muted">Volume mensal e participação percentual acumulada</div>
+                </div>
+                <span class="badge badge-cyan">SÉRIE HISTÓRICA</span>
+              </div>
+              <div style="position:relative; height:240px; width:100%;">
+                <canvas id="chartMonthly"></canvas>
+              </div>
+            </div>
+
+            <!-- Gráfico 2: Tipologia com Percentuais de Incidência (Donut Interativo) -->
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="panel-title">Tipologia &amp; Incidência Relativa (%)</span>
+                  <div class="text-xs text-muted">Clique em uma fatia para filtrar a tabela por natureza do evento</div>
+                </div>
+                <span class="badge badge-amber">INTERATIVO · %</span>
+              </div>
+              <div style="position:relative; height:240px; width:100%;">
+                <canvas id="chartTypes"></canvas>
+              </div>
+            </div>
+
+            <!-- Gráfico 3: Auditoria de SLA & Tempo de Resposta por Turno (Barras Reais) -->
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="panel-title">Auditoria de SLA &amp; Resposta por Turno</span>
+                  <div class="text-xs text-muted">Tempo médio real de chegada (Diurno vs Noturno) e meta contratual (≤ 12 min)</div>
+                </div>
+                <span class="badge badge-green">META ≤ 12 MIN</span>
+              </div>
+              <div style="position:relative; height:240px; width:100%;">
+                <canvas id="chartSla"></canvas>
+              </div>
+            </div>
+
+            <!-- Gráfico 4: Ranking de Postos Críticos / Clientes (Barras Horizontais) -->
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <span class="panel-title">Postos Críticos &amp; Clientes Demandados</span>
+                  <div class="text-xs text-muted">Unidades com maior volume de acionamentos registrados</div>
+                </div>
+                <span class="badge badge-cyan">TOP POSTOS</span>
+              </div>
+              <div style="position:relative; height:240px; width:100%;">
+                <canvas id="chartClients"></canvas>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- LINHA 3: TABELA TÁTICA DE OCORRÊNCIAS COM BUSCA E FILTROS MULTICRITÉRIO -->
+          <div class="panel stat-section">
+            <div class="panel-header" style="flex-wrap:wrap; gap:14px;">
+              <div>
+                <span class="panel-title" style="letter-spacing:1px;">REGISTROS OPERACIONAIS E AUDITORIA DE PÓS-TRAUMA</span>
+                <div class="text-xs text-muted" style="margin-top:2px;">
+                  Clique em qualquer linha para pré-visualizar o dossiê ou emita diretamente o Laudo Pericial Oficial
+                </div>
+              </div>
+              
+              <!-- Pílulas de Status -->
+              <div class="filter-pills">
+                <button type="button" class="filter-pill active" data-status="">TODOS</button>
+                <button type="button" class="filter-pill" data-status="em_andamento">EM ANDAMENTO</button>
+                <button type="button" class="filter-pill" data-status="concluida">CONCLUÍDAS</button>
+                <button type="button" class="filter-pill" data-status="arquivada">ARQUIVADAS</button>
+              </div>
+            </div>
+
+            <!-- Barra de Busca e Filtros Avançados -->
+            <div style="display:grid; grid-template-columns: 2fr 1.3fr 0.9fr 0.9fr auto; gap:10px; margin-bottom:14px; align-items:center;">
+              <div class="search-wrap" style="width:100%;">
+                <span class="search-icon">🔍</span>
+                <input
+                  type="text"
+                  id="searchInput"
+                  class="search-input input"
+                  style="width:100%;"
+                  placeholder="Buscar por cliente, protocolo, endereço, B.O., vigilante ou relato..."
+                  autocomplete="off"
+                />
+              </div>
+
+              <select id="filterType" class="select" style="font-size:12px; padding:8px 10px;">
+                <option value="">Todas as Naturezas / Tipos</option>
+              </select>
+
+              <select id="filterShift" class="select" style="font-size:12px; padding:8px 10px;">
+                <option value="">Todos os Turnos</option>
+                <option value="Diurno">☀️ Turno Diurno</option>
+                <option value="Noturno">🌙 Turno Noturno</option>
+              </select>
+
+              <select id="filterSeverity" class="select" style="font-size:12px; padding:8px 10px;">
+                <option value="">Todas as Gravidades</option>
+                <option value="1">🔴 Nível 1 — Crítica</option>
+                <option value="2">🟠 Nível 2 — Alta</option>
+                <option value="3">🔵 Nível 3 — Moderada</option>
+                <option value="4">🟢 Nível 4 — Baixa</option>
+              </select>
+
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-filters" title="Limpar todos os filtros">
+                ✕ LIMPAR
+              </button>
+            </div>
+
+            <!-- Tabela Tática -->
+            <div style="overflow-x:auto;">
+              <table class="tactical-table">
+                <thead>
+                  <tr>
+                    <th>PROTOCOLO</th>
+                    <th>DATA / TURNO</th>
+                    <th>CLIENTE / POSTO</th>
+                    <th>CLASSIFICAÇÃO</th>
+                    <th>GRAVIDADE</th>
+                    <th>SLA RESPOSTA</th>
+                    <th>STATUS</th>
+                    <th style="text-align:right;">AÇÕES &amp; LAUDO</th>
+                  </tr>
+                </thead>
+                <tbody id="occurrences-tbody">
+                  <!-- Injetado dinamicamente via dashboard.js -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Paginação -->
+            <div id="pagination" class="pagination" style="margin-top:16px;"></div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal de Pré-Visualização Rápida do Dossiê -->
+  <div id="preview-modal" class="modal-overlay" style="display:none;">
+    <div class="modal" style="max-width:720px; width:94vw; max-height:88vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:14px;">
+        <div>
+          <div class="label-military">INSPEÇÃO RÁPIDA DE DOSSIÊ</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+            <span id="prev-protocol" class="text-xl font-mono text-cyan" style="font-weight:800;"></span>
+            <span id="prev-status"></span>
+            <span id="prev-severity"></span>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-close-preview">✕ FECHAR</button>
+      </div>
+      <div id="prev-body" style="font-size:13px; line-height:1.6;"></div>
+      <div class="modal-footer" style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="text-xs font-mono text-muted">ALTERAR STATUS:</span>
+          <select id="prev-status-select" class="select" style="font-size:11.5px; padding:5px 8px; width:auto;">
+            <option value="em_andamento">● Em Andamento</option>
+            <option value="concluida">✔ Concluída</option>
+            <option value="arquivada">▣ Arquivada</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <a id="prev-btn-full" href="#" class="btn btn-ghost btn-sm">👁 ABRIR DOSSIÊ COMPLETO</a>
+          <a id="prev-btn-edit" href="#" class="btn btn-ghost btn-sm">✎ EDITAR</a>
+          <button type="button" class="btn btn-primary btn-sm" id="prev-btn-pdf">📄 EMITIR LAUDO PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação de Exclusão -->
+  <div id="delete-modal" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-title text-red" style="font-weight:800; letter-spacing:1px;">CONFIRMAR EXCLUSÃO DE REGISTRO</div>
+      <div class="modal-body" style="font-size:13px; line-height:1.6; margin-top:10px;">
+        Tem certeza que deseja apagar permanentemente a ocorrência <strong id="delete-protocol" class="font-mono text-cyan"></strong>? Essa ação é irreversível e removerá evidências e depoimentos anexados.
+      </div>
+      <div class="modal-footer" style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-delete">CANCELAR</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-delete">CONFIRMAR EXCLUSÃO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Container de Toasts -->
+  <div id="toast-container"></div>
+
+  <!-- Script Modular -->
+  <script type="module" src="assets/js/dashboard.js"></script>
+</body>
+</html>
